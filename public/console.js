@@ -95,7 +95,6 @@
       $('conn').className = 'dot live';
       renderEarnings(me.earnings);
       renderPoolNote();
-      buildStopReasons();
       await refreshQueue();
       startPolling();
     } catch (error) {
@@ -242,6 +241,12 @@
       el('span', 'sep', ' · '),
       el('span', null, `from ${detail.caller || 'an unauthenticated caller'}`),
     );
+    if (detail.model) {
+      meta.append(
+        el('span', 'sep', ' · '),
+        el('span', null, `asked for ${detail.model}`),
+      );
+    }
 
     tickClock();
 
