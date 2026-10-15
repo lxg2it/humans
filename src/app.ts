@@ -9,6 +9,7 @@ import { errorHandler } from './http.ts';
 import { messagesRouter } from './routes/messages.ts';
 import { ratingsRouter, responderRouter } from './routes/responder.ts';
 import { adminRouter } from './routes/admin.ts';
+import { docsRouter } from './routes/docs.ts';
 
 /**
  * The whole service, assembled. Nothing here listens: the tests build an app and
@@ -41,6 +42,11 @@ export function createApp(store: Store, queue: Queue): Express {
   app.use(ratingsRouter(store));
   app.use(responderRouter(store, queue));
   app.use(adminRouter(store, queue));
+
+  // The prose: what this is, what the money is, what answering involves. Read
+  // from the repository's own Markdown at boot, so the site and the source
+  // cannot disagree about what a visitor was told.
+  app.use(docsRouter());
 
   // The console and the operator page. Both are plain files with no build step,
   // so there is nothing to keep in sync.

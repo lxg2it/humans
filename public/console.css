@@ -1,15 +1,4 @@
-:root {
-  --bg: #0e1013;
-  --panel: #161a20;
-  --panel-2: #1c2129;
-  --line: #262c36;
-  --ink: #e6e9ef;
-  --muted: #8b95a5;
-  --accent: #7ee787;
-  --warn: #f0b849;
-  --bad: #ff7b72;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-}
+/* Colours live in tokens.css, which every page includes first. */
 
 * { box-sizing: border-box; }
 
