@@ -206,7 +206,8 @@
       note.textContent =
         `The guarantee is ${me.guarantee_sats} sats per reply. The pool balance could not be read` +
         `${me.pool_error ? ` — ${me.pool_error}` : ''}, so whether it is funded is unknown right now. ` +
-        `That is a missing figure, not an empty one.`;
+        `That is a missing figure, not an empty one: while the pool holds something the guarantee is paid, and ` +
+        `when it is empty nothing is paid.`;
       note.className = 'warn';
     } else if (me.pool_sats <= 0) {
       note.textContent =
