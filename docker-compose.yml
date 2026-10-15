@@ -5,7 +5,11 @@
 services:
   humans:
     build: .
-    image: humans:latest
+    # Nameable for the same reason as the container name, and learned the hard
+    # way: a smoke test that builds `humans:latest` on the deployment host moves
+    # the tag the deployment starts from, so the next `compose up -d` would run
+    # whatever the test left behind. The test builds its own and removes it.
+    image: ${HUMANS_IMAGE:-humans:latest}
     # Nameable, because a second instance on the same machine is a thing this
     # file already allows for the port: a smoke test that runs on the host
     # serving real traffic must not be able to collide with the deployment.

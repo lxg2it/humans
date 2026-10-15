@@ -23,6 +23,11 @@ export HUMANS_PORT="$PORT"
 # Its own container name, so this can run on the machine that is already
 # serving callers without touching the deployment's container.
 export HUMANS_CONTAINER_NAME="${HUMANS_CONTAINER_NAME:-humans-smoke}"
+# And its own image tag, so running this on the deployment host cannot move the
+# tag the deployment starts from. Measured the hard way: building here moved
+# `humans:latest` on the box to an image built from a throwaway checkout, which
+# is invisible until something later starts a container from the tag.
+export HUMANS_IMAGE="${HUMANS_IMAGE:-humans-smoke:latest}"
 
 # The data directory is a bind mount, so the container's user has to be able to
 # write to it. The deployment runs as 1000 (the image's `node` user, which is
@@ -35,6 +40,9 @@ FAILED=0
 
 cleanup() {
   docker compose down --remove-orphans >/dev/null 2>&1 || true
+  # Leave nothing behind, including the image: a smoke test that accumulates
+  # images on the deployment host is its own small kind of vandalism.
+  docker image rm -f "$HUMANS_IMAGE" >/dev/null 2>&1 || true
   rm -f "$BODY"
 }
 trap cleanup EXIT
