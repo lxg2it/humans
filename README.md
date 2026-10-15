@@ -36,7 +36,10 @@ npm run admin -- key responder ada    # mint the first console key
 npm run admin -- key caller demo      # mint the first caller key
 ```
 
-The console is at `/`, the operator page at `/admin` (needs `HUMANS_ADMIN_KEY`).
+The landing page is at `/`, the console it advertises is at `/console`, and the operator page
+is at `/admin` (needs `HUMANS_ADMIN_KEY`). The landing page, `/answer` and `/build` are rendered
+by the service (`src/site.ts`) rather than served from a file, because the traffic chart on the
+front page is a live reading of the database.
 
 Data lives in `~/.humans/humans.sqlite` unless `HUMANS_DATA_DIR` says otherwise.
 
@@ -127,6 +130,12 @@ Responder-facing, used by the console:
 - `POST /api/requests/:id/validate` — check a tool input without submitting
 - `POST /api/requests/:id/submit`
 - `GET /api/ledger`
+
+Public, for the landing pages:
+
+- `GET /api/stats` — call counts per day and a few aggregates. **Aggregates only**, by
+  construction: no caller name, no responder name, no prompt. Cached for 30 seconds.
+- `GET /healthz` — whether it is up and how deep the queue is
 
 Operator-facing: `/api/admin/*`, plus `npm run admin` for keys, what is owed, and
 recording settlements.

@@ -108,7 +108,17 @@ export interface LedgerRow {
   txid: string | null;
 }
 
+/** One UTC calendar day of traffic, as a chart wants it. */
+export interface DayCount {
+  /** `YYYY-MM-DD`, UTC. */
+  date: string;
+  calls: number;
+  answered: number;
+}
+
 export interface Stats {
+  /** Every request ever, whatever became of it. */
+  total: number;
   waiting: number;
   claimed: number;
   answered: number;
@@ -656,6 +666,7 @@ export class Store {
     );
 
     return {
+      total: Number((this.db.prepare('SELECT COUNT(*) AS n FROM requests').get() as { n: number }).n),
       waiting: count('queued'),
       claimed: count('claimed'),
       answered: count('answered'),
@@ -668,6 +679,59 @@ export class Store {
       owedSats: Number(money.earned) - Number(money.paid),
       poolSats: this.opts.poolSats,
     };
+  }
+
+  /**
+   * Calls and answers per UTC day, over a continuous window ending today.
+   *
+   * The continuity is the point of this method rather than an incidental
+   * property of it. A GROUP BY returns only the days that have rows, so a
+   * fortnight with traffic on two of them comes back as two days — and a chart
+   * drawn from two points is not a smaller chart, it is a wrong one, because it
+   * says the quiet days did not happen. The axis is built in full here and the
+   * counts are dropped into it.
+   *
+   * `answered` is bucketed on answered_at and not on created_at, deliberately:
+   * a call made at 23:50 and answered at 00:10 belongs to two different days,
+   * and putting it in one day's column twice would double it.
+   *
+   * Two queries, one per measure, over a window of weeks on a table of
+   * hundreds. Neither measure can use the (status, created_at) index as it
+   * stands, and both scan; that is cheaper than an index this table will not
+   * earn until it is far larger than it is ever likely to be.
+   */
+  dailyCounts(days: number, now = Date.now()): DayCount[] {
+    if (days <= 0) return [];
+    const dayMs = 86_400_000;
+    const today = Math.floor(now / dayMs) * dayMs;
+    const first = today - (days - 1) * dayMs;
+
+    const byDay = (rows: Array<{ day: string; n: number }>): Map<string, number> =>
+      new Map(rows.map((row) => [row.day, Number(row.n)]));
+
+    const calls = byDay(
+      this.db
+        .prepare(
+          `SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n
+             FROM requests WHERE created_at >= ? GROUP BY day`,
+        )
+        .all(first) as Array<{ day: string; n: number }>,
+    );
+    const answered = byDay(
+      this.db
+        .prepare(
+          `SELECT date(answered_at / 1000, 'unixepoch') AS day, COUNT(*) AS n
+             FROM requests WHERE status = 'answered' AND answered_at >= ? GROUP BY day`,
+        )
+        .all(first) as Array<{ day: string; n: number }>,
+    );
+
+    const out: DayCount[] = [];
+    for (let offset = 0; offset < days; offset += 1) {
+      const date = new Date(first + offset * dayMs).toISOString().slice(0, 10);
+      out.push({ date, calls: calls.get(date) ?? 0, answered: answered.get(date) ?? 0 });
+    }
+    return out;
   }
 
   /** Trims request bodies for answered and failed calls; the reply is the part worth keeping. */

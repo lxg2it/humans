@@ -10,6 +10,7 @@ import { messagesRouter } from './routes/messages.ts';
 import { ratingsRouter, responderRouter } from './routes/responder.ts';
 import { adminRouter } from './routes/admin.ts';
 import { docsRouter } from './routes/docs.ts';
+import { siteRouter } from './routes/site.ts';
 
 /**
  * The whole service, assembled. Nothing here listens: the tests build an app and
@@ -48,9 +49,15 @@ export function createApp(store: Store, queue: Queue): Express {
   // cannot disagree about what a visitor was told.
   app.use(docsRouter());
 
+  // The landing pages. Rendered per request rather than served from a file,
+  // because the traffic chart is a live reading of the database.
+  app.use(siteRouter(store));
+
   // The console and the operator page. Both are plain files with no build step,
-  // so there is nothing to keep in sync.
-  app.use('/', express.static(publicDir, { index: 'index.html', extensions: ['html'] }));
+  // so there is nothing to keep in sync. `extensions: ['html']` is what makes
+  // /console resolve to console.html; there is deliberately no index.html any
+  // more, because the front door is a rendered page rather than a file.
+  app.use('/', express.static(publicDir, { extensions: ['html'] }));
 
   if (config.adminKey !== '' && existsSync(join(publicDir, 'admin.html'))) {
     app.get('/admin', (_req, res) => {

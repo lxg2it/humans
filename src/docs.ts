@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
-import { config } from './config.ts';
+import { REPOSITORY, escapeAttribute, escapeText, page } from './layout.ts';
 
 /**
  * The documents, rendered.
@@ -25,8 +25,6 @@ import { config } from './config.ts';
  * that treats `_` as italics turns them into prose.
  */
 
-export const REPOSITORY = 'https://github.com/lxg2it/humans';
-
 export interface DocumentSource {
   /** Where the page is served. */
   route: string;
@@ -34,28 +32,36 @@ export interface DocumentSource {
   file: string;
   /** What the page is called, in the tab and in the navigation. */
   title: string;
+  /** One line for search results and link previews. */
+  description: string;
 }
 
 /** Every document this service serves, and the only ones. */
 export const SOURCES: readonly DocumentSource[] = [
-  { route: '/disclaimer', file: 'DISCLAIMER.md', title: 'Disclaimer' },
-  { route: '/money', file: 'docs/the-money.md', title: 'The money' },
-  { route: '/answering', file: 'docs/answering.md', title: 'Answering calls' },
+  {
+    route: '/disclaimer',
+    file: 'DISCLAIMER.md',
+    title: 'Disclaimer',
+    description:
+      'What this service is, what it is not, and what a person reading your request means for your privacy.',
+  },
+  {
+    route: '/money',
+    file: 'docs/the-money.md',
+    title: 'The money',
+    description: 'What the satoshis are, why the unit is one answer and never one hour, and what they are not.',
+  },
+  {
+    route: '/answering',
+    file: 'docs/answering.md',
+    title: 'Answering calls',
+    description: 'For the person at the console: what you see, what not to do, and why you are under no obligation.',
+  },
 ];
 
 export interface RenderedDocument extends DocumentSource {
   /** The whole page, ready to send. */
   html: string;
-}
-
-// ---- escaping --------------------------------------------------------------
-
-function escapeText(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function escapeAttribute(text: string): string {
-  return escapeText(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ---- links -----------------------------------------------------------------
@@ -225,48 +231,20 @@ export function renderMarkdown(source: string, fromFile: string): string {
 
 // ---- pages -----------------------------------------------------------------
 
-const NAV: readonly { href: string; label: string }[] = [
-  { href: '/', label: 'console' },
-  ...SOURCES.map((source) => ({ href: source.route, label: source.title.toLowerCase() })),
-];
-
-function page(document: RenderedDocument): string {
-  const name = escapeText(config.publicName);
-  const nav = NAV.map(({ href, label }) => {
-    const current = href === document.route ? ' aria-current="page"' : '';
-    return `<a href="${escapeAttribute(href)}"${current}>${escapeText(label)}</a>`;
-  }).join('');
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeText(document.title)} · ${name}</title>
-    <link rel="stylesheet" href="/tokens.css" />
-    <link rel="stylesheet" href="/docs.css" />
-    <link rel="icon" href="data:," />
-  </head>
-  <body>
-    <header id="bar">
-      <div class="brand"><a href="/"><strong>${name}</strong></a></div>
-      <nav class="nav">${nav}</nav>
-    </header>
-    <main id="doc">
-      <article class="prose">
-${document.html}
-      </article>
-    </main>
-    <footer id="foot">
-      <span class="muted">An experiment, not a product.</span>
-      <span class="sep">·</span>
-      <a href="${REPOSITORY}">source</a>
-      <span class="sep">·</span>
-      <a href="${REPOSITORY}/blob/master/LICENSE">MIT</a>
-    </footer>
-  </body>
-</html>
-`;
+/**
+ * The shell around a document: the same header, navigation and footer as every
+ * other page of this service, and the prose stylesheet that gives a document a
+ * measure instead of a layout.
+ */
+function documentPage(document: RenderedDocument): string {
+  return page({
+    title: document.title,
+    description: document.description,
+    styles: ['/shell.css', '/docs.css'],
+    current: document.route,
+    mainId: 'doc',
+    body: `      <article class="prose">\n${document.html}\n      </article>`,
+  });
 }
 
 /**
@@ -285,6 +263,6 @@ export function loadDocuments(rootDir = join(import.meta.dirname, '..')): Render
     } catch (error) {
       throw new Error(`humans: cannot read ${source.file}: ${(error as Error).message}`);
     }
-    return { ...source, html: page({ ...source, html: renderMarkdown(markdown, source.file) }) };
+    return { ...source, html: documentPage({ ...source, html: renderMarkdown(markdown, source.file) }) };
   });
 }

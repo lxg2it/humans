@@ -109,8 +109,14 @@ fi
 # already means the container booted and the database opened. The checks below
 # are about what it serves.
 
-# The console is the product; if it 404s there is nothing here.
-check "the console is served"        /           200 '<title>console</title>'
+# The landing page is the front door; the console is the product behind it.
+check "the landing page is served"   /           200 'The model is a person.'
+check "the answer page is served"    /answer     200 'Answer calls'
+check "the API page is served"       /build      200 'Get a caller key'
+check "the stats are served"         /api/stats  200 '"days"'
+# The console moved off `/` when the landing page arrived; a rename that broke
+# it would leave the product unreachable and the front door perfectly healthy.
+check "the console is served"        /console    200 '<title>console</title>'
 # These three come out of the filesystem: DISCLAIMER.md and docs/, copied into
 # the image by hand. A missing one is a boot failure rather than a 404, so this
 # is the check that the COPY statements and the mount still agree.

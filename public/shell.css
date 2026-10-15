@@ -1,0 +1,52 @@
+/* The chrome: the header, the footer, the page itself, and the few content
+   styles that every page family shares (see tokens.css for the palette). A page
+   adds its own stylesheet on top; nothing here knows what is in the middle. */
+
+html { background: var(--bg); }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#bar {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+  flex-wrap: wrap;
+}
+#bar .brand strong { font-size: 15px; letter-spacing: .01em; }
+#bar .brand a { color: var(--ink); text-decoration: none; }
+.nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+.nav a { color: var(--muted); text-decoration: none; }
+.nav a:hover { color: var(--ink); }
+.nav a[aria-current="page"] { color: var(--accent); }
+
+#foot {
+  flex: 0 0 auto; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  padding: 16px 20px; border-top: 1px solid var(--line); background: var(--panel);
+  font-size: 12px;
+}
+#foot a { color: var(--muted); text-decoration: none; }
+#foot a:hover { color: var(--ink); }
+
+/* Content, shared. Both the documents and the landing pages show code, and a
+   service that documents how to call it has to show it the way a terminal
+   would. */
+code {
+  font-family: var(--mono); font-size: .9em;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px;
+  padding: 1px 5px;
+}
+pre {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 14px 16px; overflow-x: auto; margin: 0 0 16px;
+}
+pre code { background: none; border: none; padding: 0; font-size: 13px; }
+
+.muted { color: var(--muted); }
+.sep { color: var(--line); }

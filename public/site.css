@@ -1,0 +1,156 @@
+/* The landing pages: the front door, and the two rooms behind it.
+   Same palette and chrome as the console and the documents (tokens.css,
+   shell.css). The joke is in the words, so the layout's job is to look like a
+   company that has a design system and a legal department. */
+
+#site { flex: 1 0 auto; }
+.wrap { max-width: 58rem; margin: 0 auto; padding: 0 20px; }
+
+.band { border-bottom: 1px solid var(--line); }
+.band > .wrap { padding-top: 52px; padding-bottom: 52px; }
+
+/* ---- hero ---- */
+
+.hero > .wrap { padding-top: 76px; padding-bottom: 56px; }
+
+.eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--accent); margin: 0 0 22px;
+}
+h1.headline {
+  font-size: 46px; line-height: 1.06; letter-spacing: -.025em; font-weight: 700;
+  margin: 0 0 22px; max-width: 24ch;
+}
+.lede { font-size: 19px; line-height: 1.55; margin: 0 0 18px; max-width: 50ch; }
+.plede { font-size: 15px; line-height: 1.65; color: var(--muted); margin: 0 0 34px; max-width: 56ch; }
+
+.cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.btn {
+  display: inline-block; padding: 13px 22px; border-radius: 8px;
+  font-size: 15px; font-weight: 600; text-decoration: none; line-height: 1.2;
+  border: 1px solid var(--line); color: var(--ink); background: var(--panel);
+}
+.btn:hover { border-color: var(--muted); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #06210c; }
+.btn-primary:hover { background: #93f09b; border-color: #93f09b; }
+.btn .arrow { font-weight: 400; }
+
+/* ---- section headings ---- */
+
+h2.sec {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 22px;
+}
+p.body { font-size: 15px; line-height: 1.7; margin: 0 0 14px; max-width: 56ch; }
+p.body:last-child { margin-bottom: 0; }
+ul.body { padding-left: 20px; margin: 0 0 14px; }
+ul.body li { margin-bottom: 7px; }
+
+/* ---- the model card ---- */
+
+.card {
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden;
+}
+.spec { display: grid; grid-template-columns: 13rem 1fr; margin: 0; }
+.spec dt, .spec dd {
+  padding: 12px 18px; margin: 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.55;
+}
+.spec dt {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); border-right: 1px solid var(--line);
+}
+.spec dt:first-of-type, .spec dd:first-of-type { border-top: none; }
+.spec dd strong { color: #fff; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .spec { grid-template-columns: 1fr; }
+  .spec dt { border-right: none; padding-bottom: 0; }
+  .spec dd { border-top: none; padding-top: 6px; }
+  h1.headline { font-size: 34px; }
+}
+
+/* ---- traffic ---- */
+
+.figure { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 18px 20px 14px; }
+.figure .fig-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.figure .fig-title { font-size: 14px; font-weight: 600; }
+.figure .fig-note { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 120px; border-bottom: 1px solid var(--line); }
+.is-empty .bars { height: 44px; }
+.col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; min-width: 0; }
+.seg-answered { background: var(--accent); border-radius: 2px; }
+.seg-waiting { background: var(--panel-2); border: 1px solid var(--line); border-radius: 2px; }
+
+.ticks { display: flex; gap: 4px; margin-top: 8px; }
+.ticks span {
+  flex: 1 1 0; min-width: 0; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--muted);
+  overflow: hidden;
+}
+.chart-note { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+
+.fig-data { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.fig-data summary { cursor: pointer; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.fig-data summary:hover { color: var(--ink); }
+.fig-data-note { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 10px 0; max-width: 60ch; }
+.fig-data ul {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+@media (max-width: 640px) { .ticks span:nth-child(even) { visibility: hidden; } }
+
+/* ---- the two pathways ---- */
+
+.paths { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+.path {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+  padding: 24px 22px; display: flex; flex-direction: column; gap: 12px;
+}
+.path h3 { font-size: 21px; margin: 0; letter-spacing: -.01em; }
+.path p { margin: 0; font-size: 14.5px; line-height: 1.65; color: var(--muted); }
+.path .btn { align-self: flex-start; margin-top: auto; }
+.path .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+
+/* ---- the small print ---- */
+
+.fine { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 22px 24px; }
+.fine ol { margin: 0; padding-left: 26px; }
+.fine li { font-size: 13px; line-height: 1.65; color: var(--muted); margin-bottom: 12px; }
+.fine li:last-child { margin-bottom: 0; }
+.fine strong { color: var(--ink); font-weight: 600; }
+.fine a { color: var(--muted); }
+.fine .closing { font-size: 13px; color: var(--muted); margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.fine .closing a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(126, 231, 135, .35); }
+
+/* Links inside body copy. Without this they are the browser's default blue,
+   which reads as a mistake on a page that has a palette. */
+.body a, .steps a, .note-warn a {
+  color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(126, 231, 135, .35);
+}
+.body a:hover, .steps a:hover, .note-warn a:hover { border-bottom-color: var(--accent); }
+
+.note-warn {
+  border-left: 2px solid var(--warn); padding: 10px 0 10px 14px; margin: 0 0 20px;
+  font-size: 14px; line-height: 1.6; color: var(--ink); max-width: 56ch;
+}
+.note-warn strong { color: var(--warn); }
+
+/* ---- sub-landing pages ---- */
+
+.hero.slim > .wrap { padding-top: 52px; padding-bottom: 40px; }
+.hero.slim h1.headline { font-size: 36px; max-width: 28ch; }
+.stack { display: flex; flex-direction: column; gap: 18px; max-width: 46rem; }
+.steps { counter-reset: step; list-style: none; margin: 0; padding: 0; }
+.steps > li { counter-increment: step; position: relative; padding-left: 42px; margin-bottom: 26px; }
+.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 1px;
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--accent);
+  font-family: var(--mono); font-size: 12px; line-height: 26px; text-align: center;
+}
+.steps h3 { font-size: 17px; margin: 0 0 8px; }
+.steps p { margin: 0 0 12px; font-size: 15px; line-height: 1.7; color: var(--ink); }
+.steps p.muted { font-size: 14px; color: var(--muted); }

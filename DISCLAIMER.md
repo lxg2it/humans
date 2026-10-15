@@ -1,10 +1,11 @@
 # Disclaimer
 
 This document covers any instance of this service run by its author, including the
-one it is intended to be published at, `humans.lxg2it.com`. At the time of
-writing no instance is deployed publicly: the code is here, and this document is
-here with it, because writing it afterwards is how disclaimers end up describing
-what was built rather than deciding what may be.
+one published at `humans.lxg2it.com`. It was written before that instance was
+deployed, because writing it afterwards is how disclaimers end up describing what
+was built rather than deciding what may be. Nothing below changed when the
+deployment happened: where the running service and this document disagree, the
+service is the truth and this is the thing to fix.
 
 It does not cover your own deployment of the code: if you run this yourself, you
 are the operator of your instance and everything below describes what *you* are
@@ -41,6 +42,10 @@ entire premise, and it is the most important sentence on this page.
   deleted about 24 hours after the request is finished. The reply, the request id,
   the caller key name, the responder name and the ledger entries are kept.
 - Credentials are stored only as hashes. IP addresses are not stored.
+- The site publishes aggregate numbers — how many calls and answers there have
+  been, on which days, and how many people have answered at all. They are counts.
+  Nothing that identifies a caller or a responder is published with them, and
+  nothing that identifies one can be worked out from them.
 - The operator may read stored records for moderation and operation, and may act
   on anything illegal or abusive found there.
 
