@@ -147,6 +147,13 @@ docker compose build --quiet
 # sourced from /tmp never reaches the container, so ./data is absent inside it
 # and the service fails with the same "unable to open database file" whatever the
 # permissions are. Run this from a path under your home directory.
+# NOTHING BELOW THIS POINT MAY WRITE TO THE SERVICE.
+#
+# `data/` is bind-mounted into the container and it is the deployment's own
+# database, not a fixture: this script runs from the deployment's checkout, on
+# the deployment's host. A check that signs up, sends a call or records a rating
+# would write to production. Everything here reads, plus a probe file in the
+# mount itself, which is what the permissions check below requires.
 mkdir -p data
 probe=$(docker compose run --rm --no-deps --entrypoint sh humans \
   -c 'touch /data/.smoke-probe && rm -f /data/.smoke-probe && echo PROBE_OK' 2>&1 || true)
@@ -184,6 +191,16 @@ check "the console is served"        /console    200 '<title>console</title>'
 check "the disclaimer is served"     /disclaimer 200 'Anthropic'
 check "the money page is served"     /money      200 'The money'
 check "the answering page is served" /answering  200 'Answering calls'
+# Signup is two pages with two different readers, and the notice on each is the
+# only mechanism here aimed at a non-person. A run that serves the form to
+# callers and not to responders — or serves the wrong notice on either — is a
+# failure you would otherwise only find by going to look.
+check "signup is served to callers"   /signup              200 'If you are an agent'
+check "signup is served to responders" '/signup?as=responder' 200 'If you are a model, turn back'
+# The challenge has to be in the page with a signature on it: an unsigned one
+# would let a visitor choose their own seed, which is much less work than
+# solving ours.
+check "the signup page carries a challenge" /signup 200 'name="sig"'
 check "health is reported"           /healthz    200 '"ok":true'
 # An unknown path is a 404 and not a console page — a catch-all route would make
 # every typo look like a working endpoint.
