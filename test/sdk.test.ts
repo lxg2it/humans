@@ -211,7 +211,9 @@ test('the SDK reads a non-streaming answer through the same client', async (t) =
 test('a model id we have never heard of is answered, and the answer says who answered', async (t) => {
   // Not a refusal, and that is the decision: a client that hardcodes a model
   // name is most clients, and an id it was never told to change would put this
-  // service out of reach of every one of them. What refusing was protecting is
+  // service out of reach of every one of them. The id below is the newest the
+  // vendor's own SDK types list, deliberately: this is the case a caller
+  // actually has, and it is the case the SDK warns about if we get it wrong. What refusing was protecting is
   // not lost — the response names the model that answered, which was never the
   // one asked for — and the console shows the person what the caller thought it
   // was buying, which for this service is the interesting part.
@@ -219,13 +221,13 @@ test('a model id we have never heard of is answered, and the answer says who ans
   t.after(() => h.close());
 
   const request = client(h).messages.create({
-    model: 'claude-sonnet-4-5',
+    model: 'claude-sonnet-5-5',
     max_tokens: 1024,
     messages: [{ role: 'user', content: 'hello' }],
   });
 
   const row = await h.awaitQueued();
-  assert.equal(row.model, 'claude-sonnet-4-5', 'the queue records what the caller asked for');
+  assert.equal(row.model, 'claude-sonnet-5-5', 'the queue records what the caller asked for');
   await h.answer(row.id, { text: 'Still a person.' });
 
   const message = await request;
