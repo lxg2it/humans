@@ -414,7 +414,9 @@ export function poolPage(pool: PoolReading, owedSats: number): string {
   const arithmetic = address
     ? `          <ul class="plain">
             <li><strong>Held:</strong> ${poolBalanceSentence(pool)}${
-              pool.sats === null ? '' : ` That is ${formatBtc(pool.sats)} BTC.`
+              pool.sats === null || pool.sats === 0
+                ? ''
+                : ` That is ${formatBtc(pool.sats)} BTC.`
             }</li>
             <li><strong>Ever received:</strong> ${
               pool.receivedSats === null
