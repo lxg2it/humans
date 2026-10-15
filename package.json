@@ -19,6 +19,7 @@
     "express": "^5.1.0"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.134.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0"

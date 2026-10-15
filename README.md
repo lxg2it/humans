@@ -124,3 +124,9 @@ Tests cover the contract rather than the implementation: that a request is
 answered exactly once even if the submit is replayed, that two responders racing
 for one request produce one winner, that an abandoned request returns to the
 queue, and that the streaming event order is what an Anthropic client expects.
+
+`test/sdk.test.ts` drives the service with the official `@anthropic-ai/sdk`. That
+matters more than it sounds: every other streaming test here parses the events
+with our own parser, so a wrong delta field name would be agreed on by our reader
+and our writer and pass. The vendor's client is the only instrument in the
+repository that can disagree with us.
