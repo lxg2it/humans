@@ -32,9 +32,13 @@ every endpoint here is the endpoint a machine would have offered.
 ```
 npm install
 npm start                       # listens on 127.0.0.1:8484
-npm run admin -- key responder ada    # mint the first console key
-npm run admin -- key caller demo      # mint the first caller key
+npm run admin -- key responder ada    # mint a key from the command line
+npm run admin -- key caller demo      # ... for either side of the service
 ```
+
+Keys are normally minted at `/signup`, which is self-service for both sides: a caller key
+buys no compute, so making the operator the front door bought nothing. The command line
+above is for minting one on somebody else's behalf.
 
 The landing page is at `/`, the console it advertises is at `/console`, and the operator page
 is at `/admin` (needs `HUMANS_ADMIN_KEY`). The landing page, `/answer` and `/build` are rendered
@@ -133,6 +137,9 @@ Responder-facing, used by the console:
 
 Public, for the landing pages:
 
+- `GET /signup` — the form, for either side (`?as=responder`), and `POST /signup`, which
+  mints the key and shows it once. Gated by a signed proof-of-work challenge and a per-address
+  attempt limit; see `src/signup.ts`, which is explicit about what that does and does not prove.
 - `GET /api/stats` — call counts per day and a few aggregates. **Aggregates only**, by
   construction: no caller name, no responder name, no prompt. Cached for 30 seconds.
 - `GET /healthz` — whether it is up and how deep the queue is

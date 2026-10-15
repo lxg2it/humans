@@ -25,13 +25,24 @@ import { signingKey } from './secret.ts';
 /**
  * How much arithmetic a visitor is asked to do, as leading zero bits.
  *
- * The mean is 2^bits hashes and the tail is worse — the count is geometric, so
- * roughly one visitor in twenty does three times the average. Sixteen bits is
- * about a second in a browser, which is the right side of the line: long enough
- * that a script has to be written on purpose, short enough that a person does
- * not notice they were made to work.
+ * The count of hashes needed is geometric, so the mean is 2^bits and the tail is
+ * worse: roughly one visitor in twenty does four times the average and one in
+ * three thousand does eight times it.
+ *
+ * Eighteen bits rather than sixteen, which was the first guess, and the reason
+ * is that the page tells visitors they are being asked for about a second of
+ * arithmetic. Measured in Chrome over the live service, batched 64 wide:
+ * 536,625 hashes a second, so sixteen bits averages 0.12s — fast enough that the
+ * sentence would have been flattering itself — and eighteen averages 0.49s,
+ * with a 1-in-20 wait of about 2s and a worst realistic case near 4s. A phone
+ * does this three to five times slower, which is still a pause rather than a
+ * problem.
+ *
+ * The honest reading is that this buys very little either way. What it buys is
+ * that a script author has to write the loop, and no amount of bits changes
+ * whether someone who means it gets through.
  */
-export const CHALLENGE_BITS = 16;
+export const CHALLENGE_BITS = 18;
 
 /** Long enough to read the page, short enough that an answer precomputed for a challenge goes stale. */
 export const CHALLENGE_MAX_AGE_MS = 20 * 60 * 1000;
