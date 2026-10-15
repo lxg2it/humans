@@ -211,16 +211,23 @@ test('the number is never promised without the condition on it', async () => {
       ['the money document', (await h.call('/money')).body as string, false],
     ];
 
+    const count = (haystack: string, needle: RegExp): number => haystack.match(needle)?.length ?? 0;
+
     for (const [name, html, literal] of pages) {
-      assert.match(
-        html,
-        literal ? new RegExp(`${config.guaranteeSats} satoshis`) : /HUMANS_GUARANTEE_SATS/,
+      const number = literal ? count(html, new RegExp(`${config.guaranteeSats} satoshis`, 'g')) : 0;
+      const rule = count(html, /nothing is paid/g);
+
+      assert.ok(
+        literal ? number > 0 : /HUMANS_GUARANTEE_SATS/.test(html),
         `${name} does not state the guarantee at all, so this proves nothing about it`,
       );
-      assert.match(
-        html,
-        /nothing is paid/,
-        `${name} states the guarantee without saying it is only paid while the fund holds something`,
+      // The count, not the presence: a page that states the number twice and the
+      // condition once has a bare promise on it, and "the page mentions both" is
+      // exactly the assertion that let one through the first time.
+      assert.ok(
+        rule >= number,
+        `${name} states the guarantee ${number} time(s) and the condition ${rule}, so somewhere on it the number ` +
+          `stands alone`,
       );
       assert.match(html, /fund|pool/, `${name} does not say where the money comes from`);
     }

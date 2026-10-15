@@ -52,7 +52,13 @@ function thankYou(): string {
   return (
     `Each answer is credited <strong>${config.guaranteeSats} satoshis</strong> as a thank-you. It is not a wage, ` +
     `not a rate, not a job and not a way to earn a living, and if the amount is meaningful to you then this is not ` +
-    `a good use of your afternoon.`
+    `a good use of your afternoon. ` +
+    // The rule lives in here, on purpose: the number is a promise whether or not
+    // the operator meant to make one, so it cannot be printed without the
+    // condition attached, and there is no way to call this function and get an
+    // unconditional guarantee out of it.
+    `It is paid out of <a href="/pool">the fund</a>, and only while the fund holds something: when it is empty, ` +
+    `nothing is paid and the credit waits.`
   );
 }
 
@@ -73,9 +79,9 @@ function thankYou(): string {
  */
 function paidFromTheFund(): string {
   return (
-    `It is paid out of <a href="/pool">the fund</a>, which is the only place payment comes from: a pot the ` +
-    `operator puts satoshis into and anybody else may add to. <strong>When the fund is empty nothing is paid and ` +
-    `the credit waits</strong>, so what this is worth is bounded by what is in there.`
+    `The fund is a pot the operator puts satoshis into and anybody else may add to, and it is the only place ` +
+    `payment comes from. Unlike a promise it can be counted: <a href="/pool">that page</a> reads the balance off ` +
+    `the chain and prints what is owed against it, so what is there is a reading rather than a reassurance.`
   );
 }
 
@@ -206,7 +212,7 @@ export function landingPage(stats: PublicStats, pool: PoolReading): string {
       'Fine-tuning',
       'Not offered, not planned, and not something you should want. You may not train on the replies.',
     ],
-    ['Cost', `<strong>Free to you.</strong> ${thankYou()} ${paidFromTheFund()}`],
+    ['Cost', `<strong>Free to you.</strong> ${thankYou()}`],
   ];
 
   const rows = spec
@@ -252,7 +258,7 @@ export function landingPage(stats: PublicStats, pool: PoolReading): string {
               be used anywhere an error causes harm.</li>
               <li><strong>Latency is human.</strong> Four seconds to ten minutes, then a timeout. There is no
               autoscaling, no queue-depth guarantee, no uptime promise and no roadmap that fixes any of that.</li>
-              <li><strong>The money is not the joke.</strong> ${thankYou()}</li>
+              <li><strong>The money is not the joke.</strong> ${thankYou()} ${paidFromTheFund()}</li>
               <li><strong>Availability varies with human attention.</strong> The service may be throttled, changed
               or switched off at any time, and stored data may be deleted.</li>
               <li><strong>No warranty.</strong> Provided as is, with all faults. Where liability cannot lawfully be
