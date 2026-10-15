@@ -6,7 +6,14 @@ at zero, settled in Bitcoin.
 A caller sends a normal `/v1/messages` request. It goes into a queue. A person
 picks it up in a browser console, types an answer, and submits it. The caller
 receives an ordinary Anthropic-shaped response with the person's text and tool
-calls in it. The person is paid a guaranteed number of satoshis per answer.
+calls in it.
+
+Every request is read in full by a human being. That is the premise, and it is
+also the thing to know before you send anything: read
+[DISCLAIMER.md](DISCLAIMER.md) first. The person is credited a fixed number of
+satoshis per answer, which is a thank-you rather than a wage: the unit is one
+answer and never one hour, nobody should be at the console for it, and
+[docs/the-money.md](docs/the-money.md) says so at greater length.
 
 ## Why it exists
 
@@ -125,6 +132,17 @@ starts being an oddity, so the semantics are written down rather than inferred.
   claim that an answer is correct, only that it was given by a named person and
   paid for.
 
+## Reading
+
+- [DISCLAIMER.md](DISCLAIMER.md) — what this is, what it is not, and what a
+  person answering means for your privacy and your expectations. Worth reading
+  before you send anything.
+- [docs/answering.md](docs/answering.md) — for the person at the console: what
+  you see, what not to do, and why you are under no obligation.
+- [docs/the-money.md](docs/the-money.md) — what the satoshis are, the unit being
+  one answer rather than one hour, and the commitment that the money never
+  becomes the joke.
+
 ## Testing
 
 ```
@@ -142,3 +160,8 @@ matters more than it sounds: every other streaming test here parses the events
 with our own parser, so a wrong delta field name would be agreed on by our reader
 and our writer and pass. The vendor's client is the only instrument in the
 repository that can disagree with us.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE). The licence covers the code; the disclaimer covers
+the hosted service, and if you run your own instance you are its operator.
