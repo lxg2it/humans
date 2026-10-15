@@ -1,6 +1,13 @@
 node_modules/
-data/
 .env
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# The ledger, the queue and the request bodies. Everything in here is state, and
+# none of it belongs in a commit — but the directory itself does: it is a bind
+# mount, and a deployment that has to create it first is a deployment that
+# crash-loops with "unable to open database file" the first time somebody runs
+# it from a fresh checkout.
+data/*
+!data/.gitkeep

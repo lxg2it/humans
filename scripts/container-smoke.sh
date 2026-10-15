@@ -20,6 +20,9 @@ cd "$(dirname "$0")/.."
 
 PORT="${SMOKE_PORT:-8484}"
 export HUMANS_PORT="$PORT"
+# Its own container name, so this can run on the machine that is already
+# serving callers without touching the deployment's container.
+export HUMANS_CONTAINER_NAME="${HUMANS_CONTAINER_NAME:-humans-smoke}"
 
 # The data directory is a bind mount, so the container's user has to be able to
 # write to it. The deployment runs as 1000 (the image's `node` user, which is
@@ -59,8 +62,40 @@ check() {
 echo "building the image the deployment runs"
 docker compose build --quiet
 
+# The mount the container writes its database to has to exist and be writable by
+# the uid it runs as, and nothing arranges that: a missing bind-mount source is
+# created root-owned on Linux and may not be created at all on a Mac. Both arrive
+# as "container is unhealthy", with the reason only in the container's log.
+#
+# So the condition is measured before anything is started, as the deployment's own
+# user. A wrong uid otherwise costs the whole wait timeout and reports a string,
+# and the string differs by how the write failed: SQLite says "unable to open
+# database file" for a path it cannot reach and "attempt to write a readonly
+# database" for one it can. Only the first is what a log-grep would look for; a
+# control caught exactly that, which is why this is a probe and not a grep.
+#
+# One way to hit a false version of this: under Colima on a Mac a bind mount
+# sourced from /tmp never reaches the container, so ./data is absent inside it
+# and the service fails with the same "unable to open database file" whatever the
+# permissions are. Run this from a path under your home directory.
+mkdir -p data
+probe=$(docker compose run --rm --no-deps --entrypoint sh humans \
+  -c 'touch /data/.smoke-probe && rm -f /data/.smoke-probe && echo PROBE_OK' 2>&1 || true)
+if ! grep -q PROBE_OK <<<"$probe"; then
+  fail "the container's user ($HUMANS_UID:$HUMANS_GID) could not write to ./data:"
+  printf '%s\n' "$probe" | grep -vE '^$|Creating|Created' | sed 's/^/        /'
+  say "hint" "if that is a permissions error: chown $HUMANS_UID:$HUMANS_GID data"
+  exit 1
+fi
+
 echo "starting it as the deployment starts it"
-docker compose up -d --wait --wait-timeout 60 >/dev/null
+if ! docker compose up -d --wait --wait-timeout 60 >/dev/null 2>&1; then
+  # Compose's one-line "is unhealthy" is not a diagnosis. Print what the
+  # container itself says, before the trap removes it.
+  fail "the container did not come up. It says:"
+  docker compose logs --no-color --tail 20 2>&1 | sed 's/^/        /'
+  exit 1
+fi
 
 # `compose up --wait` returns only when the healthcheck passes, so reaching here
 # already means the container booted and the database opened. The checks below

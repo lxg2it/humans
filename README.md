@@ -43,6 +43,7 @@ Data lives in `~/.humans/humans.sqlite` unless `HUMANS_DATA_DIR` says otherwise.
 ### In a container
 
 ```
+mkdir -p data                     # the mount below has to exist first
 docker compose up -d --build      # builds the image, publishes 127.0.0.1:8484
 ```
 
@@ -52,6 +53,14 @@ Two things to know: the port is published on the loopback interface only, becaus
 terminating TLS is a reverse proxy's job and not this service's; and the data
 directory has to be writable by the container's user, `1000:1000` unless
 `HUMANS_UID`/`HUMANS_GID` say otherwise.
+
+That second point is worth more than it looks. The directory is a bind mount, so
+if it is missing, the container does not fall back to a writable one: on Linux
+Docker creates it as `root`, the service cannot open its own database, and it
+exits. Restart is `unless-stopped`, so what you get is a container that keeps
+dying and a message that says only `unhealthy`. Hence the `mkdir` above, and hence
+`scripts/container-smoke.sh` checking it before it starts anything — the
+checkout carries an empty `data/.gitkeep` for exactly this reason.
 
 ### Configuration
 

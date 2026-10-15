@@ -6,7 +6,10 @@ services:
   humans:
     build: .
     image: humans:latest
-    container_name: humans
+    # Nameable, because a second instance on the same machine is a thing this
+    # file already allows for the port: a smoke test that runs on the host
+    # serving real traffic must not be able to collide with the deployment.
+    container_name: ${HUMANS_CONTAINER_NAME:-humans}
     restart: unless-stopped
     # Optional, so a checkout can be run without one: every value has a working
     # default. A deployment supplies at least HUMANS_ADMIN_KEY.
