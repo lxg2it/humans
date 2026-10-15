@@ -107,8 +107,10 @@ starts being an oddity, so the semantics are written down rather than inferred.
   that there is.
 - **Human latency is the latency.** A request waits for a human to notice it. The
   default timeout is ten minutes because that is the honest unit.
-- **Tool call ids are minted here**, not typed by the responder, so they are
-  stable within a response and meaningless across conversations.
+- **Tool call ids are minted here** unless the responder supplies one, and are
+  checked for shape either way. They are unique per response and carry no meaning
+  across conversations: a client that replays a history sends back the id it was
+  given, exactly as it would with any other provider.
 - **One instance, one queue.** There is no federation between deployments and no
   claim that an answer is correct, only that it was given by a named person and
   paid for.

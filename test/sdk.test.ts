@@ -112,6 +112,83 @@ test('a tool call arrives as a parsed tool_use block, not as text', async (t) =>
   assert.deepEqual(block.type === 'tool_use' && block.input, { city: 'Melbourne' });
 });
 
+const WEATHER_TOOL = {
+  name: 'get_weather',
+  description: 'Read the current weather for a city.',
+  input_schema: { type: 'object' as const, properties: { city: { type: 'string' } }, required: ['city'] },
+};
+
+test('a tool result answers a call by id, and the conversation continues', async (t) => {
+  // This is the exchange every agent client performs, including the tool result
+  // going back in the next request. It is also the only path that exercises the
+  // rule that a tool_result must name a tool_use the history actually declared.
+  const h = await harness({ callTimeoutMs: 60_000 });
+  t.after(() => h.close());
+  const anthropic = client(h);
+  const question = { role: 'user' as const, content: 'What is the weather in Melbourne?' };
+
+  const first = anthropic.messages.stream({
+    model: 'human-1',
+    max_tokens: 1024,
+    messages: [question],
+    tools: [WEATHER_TOOL],
+  });
+  const firstRow = await h.awaitQueued();
+  await h.answer(firstRow.id, { text: '', tools: [{ name: 'get_weather', input: { city: 'Melbourne' } }] });
+
+  const asked = await first.finalMessage();
+  const call = asked.content.find((block) => block.type === 'tool_use');
+  assert.ok(call && call.type === 'tool_use', 'the first turn has to be a tool call');
+  assert.match(call.id, /^toolu_/, 'ids are Anthropic-shaped');
+
+  const second = anthropic.messages.create({
+    model: 'human-1',
+    max_tokens: 1024,
+    tools: [WEATHER_TOOL],
+    messages: [
+      question,
+      { role: 'assistant', content: asked.content },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: call.id, content: '17C and raining' }] },
+    ],
+  });
+  const secondRow = await h.awaitQueued();
+  await h.answer(secondRow.id, { text: 'It is 17C and raining in Melbourne.' });
+
+  assert.equal(textOf(await second), 'It is 17C and raining in Melbourne.');
+});
+
+test('a tool result naming a call that never happened is refused, with the reason', async (t) => {
+  const h = await harness({ callTimeoutMs: 60_000 });
+  t.after(() => h.close());
+
+  // The history is well formed — user, assistant, user — so the only thing
+  // wrong with it is the id. A control that tripped the alternation rule
+  // instead would be measuring a different rule than it claims to.
+  await assert.rejects(
+    client(h).messages.create({
+      model: 'human-1',
+      max_tokens: 1024,
+      messages: [
+        { role: 'user', content: 'What is the weather in Melbourne?' },
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_declared', name: 'get_weather', input: { city: 'Melbourne' } }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'toolu_neverdeclared', content: '17C' }],
+        },
+      ],
+    }),
+    (error: unknown) => {
+      const failure = error as { status?: number; error?: { error?: { message?: string } } };
+      assert.equal(failure.status, 400);
+      assert.match(failure.error?.error?.message ?? '', /tool_result references toolu_neverdeclared/);
+      return true;
+    },
+  );
+});
+
 test('the SDK reads a non-streaming answer through the same client', async (t) => {
   const h = await harness({ callTimeoutMs: 60_000 });
   t.after(() => h.close());
