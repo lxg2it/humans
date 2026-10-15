@@ -140,7 +140,16 @@ function poolBalanceSentence(pool: PoolReading): string {
       `instance has no pool address configured, so nobody outside it can check the figure.`;
   }
   if (pool.sats === null) {
-    return `Never read. This instance has a pool address and the balance has not once been fetched from the chain.`;
+    // A null balance has two causes and they are not the same news. If the last
+    // attempt failed, saying "not read yet" reports an outage as a neutral
+    // waiting state, and the reason never reaches the page that exists to be
+    // checkable. The order here is the whole point of the branch.
+    if (pool.error) {
+      return `Not read. This instance has a pool address and the chain could not be reached ` +
+        `(${pool.error}), so the balance is unknown rather than zero.`;
+    }
+    return `Not read. This instance has a pool address and no fetch has completed since it started, ` +
+      `so the balance is unknown rather than zero.`;
   }
   const when = pool.readAt === null ? 'at an unknown time' : describeAge(pool.readAt);
   const age = `read from the chain ${when}`;

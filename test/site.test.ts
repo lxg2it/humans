@@ -189,6 +189,32 @@ function reading(over: Partial<PoolReading> = {}): PoolReading {
   };
 }
 
+test('an unreachable chain is reported as a failure, not as nothing read yet', async () => {
+  const h = await harness();
+  try {
+    const cold = poolPage(reading({ sats: null, receivedSats: null, spentSats: null, txCount: null, readAt: null }), 0);
+    const failed = poolPage(
+      reading({ sats: null, receivedSats: null, spentSats: null, txCount: null, readAt: null, error: 'ECONNREFUSED' }),
+      0,
+    );
+
+    // The control: a cold reader with no error says it has not read, and does not
+    // claim a failure it has no evidence of.
+    assert.match(cold, /no fetch has completed/, 'a cold reader does not say where it stands');
+    assert.doesNotMatch(cold, /could not be reached/, 'a cold reader claims a failure it cannot know about');
+
+    // And the case this test exists for: the two must not render alike.
+    assert.match(failed, /could not be reached/, 'a chain failure is reported as though nothing had been attempted');
+    assert.match(failed, /ECONNREFUSED/, 'the reason the reading failed is missing from the page');
+    assert.ok(
+      failed !== cold,
+      'an unreachable chain and a cold reader render identically, so the page cannot tell a reader which happened',
+    );
+  } finally {
+    await h.close();
+  }
+});
+
 test('the number is never promised without the condition on it', async () => {
   const h = await harness();
   try {
