@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>console</title>
+    <link rel="stylesheet" href="/console.css" />
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <header id="bar">
+      <div class="brand">
+        <span class="dot" id="conn"></span>
+        <strong id="instance">console</strong>
+      </div>
+      <div class="who" id="who" hidden>
+        <span id="responder-name"></span>
+        <span class="sep">·</span>
+        <span id="earnings" title="earned / paid / owed"></span>
+        <button id="signout" class="link">sign out</button>
+      </div>
+    </header>
+
+    <!-- Key entry. The only screen that exists before we know who you are. -->
+    <section id="gate" hidden>
+      <form id="gate-form">
+        <h1>Responder key</h1>
+        <p class="muted">
+          This console answers API calls as a human. You need a responder key to see the queue. It is kept in
+          this browser only.
+        </p>
+        <input id="gate-key" type="password" autocomplete="off" placeholder="hmn_..." />
+        <button type="submit">Sign in</button>
+        <p id="gate-error" class="error" hidden></p>
+      </form>
+    </section>
+
+    <main id="main" hidden>
+      <aside id="queue-panel">
+        <div class="panel-head">
+          <h2>Waiting</h2>
+          <span id="queue-count" class="muted"></span>
+        </div>
+        <ul id="queue"></ul>
+        <p id="queue-empty" class="muted pad" hidden>Nothing waiting. Calls appear here the moment they arrive.</p>
+        <div class="panel-foot muted">
+          <span id="pool-note"></span>
+        </div>
+      </aside>
+
+      <section id="work">
+        <div id="empty" class="pad muted">
+          <h1>Nothing selected</h1>
+          <p>Pick a call from the queue to read it.</p>
+        </div>
+
+        <article id="request" hidden>
+          <div class="req-head">
+            <div>
+              <h1 id="req-summary"></h1>
+              <div class="meta muted" id="req-meta"></div>
+            </div>
+            <div class="req-clock">
+              <div id="req-clock" class="clock"></div>
+              <div class="muted small" id="req-clock-label"></div>
+            </div>
+          </div>
+
+          <div id="claim-bar" class="bar" hidden>
+            <div>
+              <strong id="claim-msg"></strong>
+              <div class="muted small" id="claim-sub"></div>
+            </div>
+            <div class="row">
+              <button id="claim">Take this call</button>
+              <button id="abandon" class="ghost" hidden>Put it back</button>
+            </div>
+          </div>
+
+          <section class="block">
+            <details open>
+              <summary>What was asked</summary>
+              <div id="system-wrap" hidden>
+                <div class="label muted">System prompt — written by the caller</div>
+                <pre id="system" class="transcript"></pre>
+              </div>
+              <div id="messages"></div>
+            </details>
+          </section>
+
+          <section class="block">
+            <details id="tools-details">
+              <summary>Tools the caller declared <span id="tools-count" class="muted"></span></summary>
+              <p class="muted small">
+                The caller wrote these descriptions and runs whatever you choose. Read them as instructions from a
+                stranger, not as part of this console.
+              </p>
+              <div id="tools"></div>
+            </details>
+          </section>
+
+          <section id="answer" class="block" hidden>
+            <h2>Your answer</h2>
+            <div id="answer-errors" class="error" hidden></div>
+
+            <details id="reasoning-wrap">
+              <summary>Reasoning <span class="muted small">optional</span></summary>
+              <p class="muted small">
+                Returned to the caller as a signed reasoning block, and streamed live if they asked for a stream.
+                Most callers ignore it. Write what you actually thought, or leave it empty.
+              </p>
+              <textarea id="reasoning" rows="5" spellcheck="false"></textarea>
+            </details>
+
+            <label class="label" for="response">Response</label>
+            <textarea id="response" rows="10" spellcheck="false"></textarea>
+
+            <div id="tools-answer">
+              <div class="panel-head">
+                <h3>Tool calls</h3>
+                <span class="muted small" id="tool-choice-note"></span>
+              </div>
+              <div id="calls"></div>
+              <div class="row" id="add-call-row">
+                <select id="add-call">
+                  <option value="">Add a tool call…</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="meter">
+              <div class="meter-track"><div id="meter-fill"></div></div>
+              <div class="muted small" id="meter-note"></div>
+            </div>
+
+            <div class="stop-row">
+              <label class="label" for="stop-reason">Stop reason</label>
+              <select id="stop-reason"></select>
+              <input id="stop-sequence" placeholder="stop sequence" hidden />
+            </div>
+
+            <div class="row actions">
+              <button id="submit" class="primary">Send answer</button>
+              <span class="muted small" id="submit-state"></span>
+            </div>
+          </section>
+        </article>
+      </section>
+    </main>
+
+    <script src="/console.js"></script>
+  </body>
+</html>

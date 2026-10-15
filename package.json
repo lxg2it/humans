@@ -1,0 +1,26 @@
+{
+  "name": "humans",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An inference API whose model is people. Anthropic-compatible, priced at zero, settled in Bitcoin.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "admin": "node scripts/admin.ts",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "HUMANS_ADMIN_KEY=test-admin-key node --test \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>humans · operator</title>
+    <link rel="stylesheet" href="/console.css" />
+    <link rel="icon" href="data:," />
+    <style>
+      body { display: block; overflow: auto; }
+      main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+      section { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 16px 18px; margin: 18px 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+      .stat { background: var(--panel-2); border-radius: 8px; padding: 10px 12px; }
+      .stat .n { font-size: 22px; font-family: var(--mono); }
+      .key-out { font-family: var(--mono); background: #16211a; border: 1px solid #2c4a33; border-radius: 8px; padding: 10px; word-break: break-all; }
+      .warn { color: var(--warn); }
+      form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+      form.inline label { flex: 1 1 140px; font-size: 12px; color: var(--muted); }
+      form.inline input, form.inline select { margin-top: 3px; }
+      code { font-family: var(--mono); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <header id="bar">
+      <div class="brand"><span class="dot" id="conn"></span><strong>operator</strong></div>
+      <div class="who"><span id="who-label" class="muted">not signed in</span></div>
+    </header>
+
+    <main>
+      <section id="gate">
+        <h2>Admin key</h2>
+        <p class="muted small">
+          Kept in this browser only, and sent as a header. It is the key from <code>HUMANS_ADMIN_KEY</code>.
+        </p>
+        <form class="inline" id="gate-form">
+          <label>key<input id="gate-key" type="password" autocomplete="off" /></label>
+          <button type="submit">Sign in</button>
+        </form>
+        <p id="gate-error" class="error small" hidden></p>
+      </section>
+
+      <div id="app" hidden>
+        <section>
+          <h2>Overview</h2>
+          <div class="grid" id="stats"></div>
+          <p class="muted small" id="pool-note" style="margin-top: 12px"></p>
+          <p class="muted small" id="config-note"></p>
+        </section>
+
+        <section>
+          <h2>Credentials</h2>
+          <form class="inline" id="mint-form">
+            <label>kind
+              <select id="mint-kind">
+                <option value="responder">responder</option>
+                <option value="caller">caller</option>
+              </select>
+            </label>
+            <label>name<input id="mint-name" placeholder="ann, or the client's name" /></label>
+            <button type="submit">Mint</button>
+          </form>
+          <div id="mint-out"></div>
+          <table><thead><tr><th>id</th><th>kind</th><th>name</th><th>state</th><th>last used</th><th></th></tr></thead><tbody id="credentials"></tbody></table>
+        </section>
+
+        <section>
+          <h2>Money</h2>
+          <p class="muted small">
+            The guarantee is written when a reply is submitted. Paying a responder records a settlement against it; nothing here moves
+            bitcoin, it only writes down that you did and by which transaction.
+          </p>
+          <table><thead><tr><th>responder</th><th>replies</th><th>earned</th><th>paid</th><th>owed</th><th>rating</th></tr></thead><tbody id="owing"></tbody></table>
+          <form class="inline" id="settle-form" style="margin-top: 14px">
+            <label>responder<input id="settle-responder" /></label>
+            <label>sats<input id="settle-sats" type="number" min="1" step="1" /></label>
+            <label>address<input id="settle-address" /></label>
+            <label>transaction<input id="settle-txid" /></label>
+            <button type="submit">Record payment</button>
+          </form>
+          <p id="settle-error" class="error small" hidden></p>
+          <details style="margin-top: 14px">
+            <summary class="muted small">ledger</summary>
+            <table><thead><tr><th>when</th><th>responder</th><th>kind</th><th>sats</th><th>detail</th></tr></thead><tbody id="ledger"></tbody></table>
+          </details>
+        </section>
+
+        <section>
+          <h2>Requests</h2>
+          <table><thead><tr><th>when</th><th>status</th><th>summary</th><th>who</th><th>id</th></tr></thead><tbody id="requests"></tbody></table>
+        </section>
+      </div>
+    </main>
+
+    <script src="/admin.js"></script>
+  </body>
+</html>
