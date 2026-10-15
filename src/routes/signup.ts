@@ -1,0 +1,159 @@
+import express, { Router } from 'express';
+import type { Request, Response } from 'express';
+import type { Store } from '../db.ts';
+import { CHALLENGE_MAX_AGE_MS, checkSolution, issueChallenge } from '../signup.ts';
+import type { SignupKind } from '../signup.ts';
+import { signupPage, signupResultPage } from '../site.ts';
+
+/**
+ * Self-service keys.
+ *
+ * The service used to mint every key by hand, which made the operator the
+ * front door and meant a visitor arriving at three in the morning met a page
+ * telling them to ask somebody. That is a bad trade for a key that buys no
+ * compute: what a key is for here is attribution and revocation, and neither of
+ * those is improved by a human in the loop.
+ *
+ * What is worth being careful about is not the key, it is the queue behind it.
+ * So the arithmetic in src/signup.ts gates the form, the limit below gates
+ * repetition, and the page itself asks agents to turn back — a request, made in
+ * plain language, because that is the only mechanism here that could possibly
+ * work and pretending otherwise would be the dishonest kind of theatre.
+ */
+
+/**
+ * Attempts allowed per address per hour, counted on submissions rather than on
+ * keys, since a script that fails is the thing worth bounding.
+ *
+ * Set to survive a busy day rather than to be tight: a household, an office or a
+ * university shares one address, and refusing a real visitor at the moment they
+ * decided to try costs far more than a stray row. The work in the form is what
+ * makes volume expensive.
+ */
+const ATTEMPTS_PER_HOUR = 20;
+const HOUR_MS = 60 * 60 * 1000;
+
+/** How many addresses one process will remember. Past this, expired entries are swept. */
+const TRACKED_ADDRESSES = 10_000;
+
+export function signupRouter(store: Store): Router {
+  const router = Router();
+
+  /**
+   * Both of these are per-process, in memory, and lost on restart, which is the
+   * same limitation the rate limiter carries and for the same reason: there is
+   * no shared store here by design. Restarting the service resets a visitor's
+   * budget. That is a real limitation rather than a hidden one.
+   */
+  const attempts = new Map<string, number[]>();
+  const spent = new Map<string, number>();
+
+  function overBudget(address: string, now: number): boolean {
+    const recent = (attempts.get(address) ?? []).filter((at) => now - at < HOUR_MS);
+    recent.push(now);
+    attempts.set(address, recent);
+    if (attempts.size > TRACKED_ADDRESSES) {
+      for (const [key, times] of attempts) {
+        if (times.every((at) => now - at >= HOUR_MS)) attempts.delete(key);
+      }
+    }
+    return recent.length > ATTEMPTS_PER_HOUR;
+  }
+
+  function alreadySpent(seed: string, now: number): boolean {
+    for (const [key, until] of spent) if (until <= now) spent.delete(key);
+    return spent.has(seed);
+  }
+
+  function kindOf(value: unknown): SignupKind {
+    return value === 'responder' ? 'responder' : 'caller';
+  }
+
+  /**
+   * The name is not an identity and does not pretend to be one. For a responder
+   * it is the model name the caller will be shown, which is why it is required
+   * there and optional for a caller: signing a reply is a different act from
+   * sending a request.
+   */
+  function nameOf(raw: unknown, kind: SignupKind): { ok: true; name: string } | { ok: false; reason: string } {
+    const text = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+    if (text === '') {
+      return kind === 'responder'
+        ? { ok: false, reason: 'a responder needs a name: it is the model name the caller is shown' }
+        : { ok: true, name: 'anonymous' };
+    }
+    if (text.length > 64) return { ok: false, reason: 'that name is longer than 64 characters' };
+    if (/[\u0000-\u001f\u007f]/.test(text)) return { ok: false, reason: 'that name contains control characters' };
+    return { ok: true, name: text };
+  }
+
+  router.get('/signup', (req: Request, res: Response) => {
+    const kind = kindOf(req.query.as);
+    res.type('html').send(signupPage(kind, issueChallenge()));
+  });
+
+  /**
+   * No CSRF token, deliberately, and it is worth writing down why rather than
+   * leaving an absence to look like an oversight: there is no session and no
+   * cookie anywhere in this service, so there is nobody to forge a request *as*.
+   * A key minted by someone else's browser is a key sent to them.
+   */
+  router.post('/signup', express.urlencoded({ extended: false, limit: '16kb' }), (req: Request, res: Response) => {
+    const form = (req.body ?? {}) as Record<string, unknown>;
+    const kind = kindOf(form.as);
+    const now = Date.now();
+    const address = req.ip ?? 'unknown';
+
+    if (overBudget(address, now)) {
+      res
+        .status(429)
+        .type('html')
+        .send(
+          signupPage(kind, issueChallenge(now), {
+            status: 429,
+            text:
+              `That is ${ATTEMPTS_PER_HOUR} attempts from this address in the last hour, which is the limit. It resets ` +
+              `within the hour. If you are on a shared network and this is a surprise, it is somebody else on it.`,
+          }),
+        );
+      return;
+    }
+
+    const verdict = checkSolution(
+      { seed: form.seed, issued: form.issued, sig: form.sig, solution: form.solution },
+      now,
+    );
+    if (!verdict.ok) {
+      res.status(400).type('html').send(signupPage(kind, issueChallenge(now), { status: 400, text: verdict.reason }));
+      return;
+    }
+
+    // One challenge, one key: without this a solution could be replayed, and a
+    // solution is the only thing in the request that cost anything to produce.
+    const seed = form.seed as string;
+    if (alreadySpent(seed, now)) {
+      res
+        .status(400)
+        .type('html')
+        .send(
+          signupPage(kind, issueChallenge(now), {
+            status: 400,
+            text: 'That challenge has already been used. Reload the page and start again.',
+          }),
+        );
+      return;
+    }
+
+    const named = nameOf(form.name, kind);
+    if (!named.ok) {
+      res.status(400).type('html').send(signupPage(kind, issueChallenge(now), { status: 400, text: named.reason }));
+      return;
+    }
+
+    spent.set(seed, Number(form.issued) + CHALLENGE_MAX_AGE_MS);
+    const minted = store.mintCredential(kind, named.name);
+    res.status(201).type('html').send(signupResultPage(kind, named.name, minted.key));
+  });
+
+  return router;
+}

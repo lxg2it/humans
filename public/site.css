@@ -154,3 +154,37 @@ ul.body li { margin-bottom: 7px; }
 .steps h3 { font-size: 17px; margin: 0 0 8px; }
 .steps p { margin: 0 0 12px; font-size: 15px; line-height: 1.7; color: var(--ink); }
 .steps p.muted { font-size: 14px; color: var(--muted); }
+
+/* ---- the signup form ------------------------------------------------------ */
+
+/* The label above an input. It exists in the console's stylesheet for the same
+   reason it is repeated here: two page families, one look, and a form that reads
+   as a form rather than as unstyled browser furniture. */
+.label { display: block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 6px; }
+.small { font-size: 12px; line-height: 1.6; }
+
+#signup input[type="text"] {
+  width: 100%; max-width: 34ch; font-family: var(--mono); font-size: 14px;
+  color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; margin: 0 0 6px;
+}
+#signup input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+/* The checkbox is disabled until the arithmetic lands, so it has to look
+   disabled — a control that appears live and silently does nothing is the
+   failure this form is most likely to have. */
+.human { display: flex; align-items: center; gap: 10px; margin: 20px 0 4px; }
+.human input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.human input[type="checkbox"]:disabled { opacity: .45; }
+.human label { font-size: 14px; color: var(--ink); }
+.human input[type="checkbox"]:disabled + label { color: var(--muted); }
+
+#human-status { min-height: 19px; }
+
+#signup .cta { margin-top: 22px; }
+#signup button[disabled] { opacity: .5; cursor: default; }
+
+/* The key, once. Monospaced and wrapping, because a key that has to be read off
+   a screen and pasted somewhere should not be a horizontal scrollbar. */
+#key code { font-size: 15px; word-break: break-all; white-space: pre-wrap; }

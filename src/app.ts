@@ -11,6 +11,7 @@ import { ratingsRouter, responderRouter } from './routes/responder.ts';
 import { adminRouter } from './routes/admin.ts';
 import { docsRouter } from './routes/docs.ts';
 import { siteRouter } from './routes/site.ts';
+import { signupRouter } from './routes/signup.ts';
 
 /**
  * The whole service, assembled. Nothing here listens: the tests build an app and
@@ -52,6 +53,10 @@ export function createApp(store: Store, queue: Queue): Express {
   // The landing pages. Rendered per request rather than served from a file,
   // because the traffic chart is a live reading of the database.
   app.use(siteRouter(store));
+
+  // Self-service keys. Until this existed every key was minted by hand, which
+  // made the operator the front door — see src/routes/signup.ts.
+  app.use(signupRouter(store));
 
   // The console and the operator page. Both are plain files with no build step,
   // so there is nothing to keep in sync. `extensions: ['html']` is what makes

@@ -47,6 +47,7 @@ export interface NavEntry {
  * asserts the two sets agree rather than the code enforcing it.
  */
 export const NAV: readonly NavEntry[] = [
+  { href: '/signup', label: 'get a key' },
   { href: '/console', label: 'console' },
   { href: '/disclaimer', label: 'disclaimer' },
   { href: '/money', label: 'the money' },
