@@ -156,9 +156,13 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
+        // api() passes the body through to fetch untouched, so it is stringified
+        // here. The first version of this line did not, and the only way it was
+        // found was by using the form against the running service: every unit
+        // test passed, because none of them exercise the browser's own fetch.
         const result = await api('/api/me/payout-address', {
           method: 'POST',
-          body: { address: input.value.trim() },
+          body: JSON.stringify({ address: input.value.trim() }),
         });
         me.payout_address = result.payout_address;
         form.hidden = true;
