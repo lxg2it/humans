@@ -40,6 +40,19 @@ The console is at `/`, the operator page at `/admin` (needs `HUMANS_ADMIN_KEY`).
 
 Data lives in `~/.humans/humans.sqlite` unless `HUMANS_DATA_DIR` says otherwise.
 
+### In a container
+
+```
+docker compose up -d --build      # builds the image, publishes 127.0.0.1:8484
+```
+
+`.env` is optional — every value has a default — and the ledger lives in `./data`,
+so a backup is a copy of a directory rather than a date with `docker volume`.
+Two things to know: the port is published on the loopback interface only, because
+terminating TLS is a reverse proxy's job and not this service's; and the data
+directory has to be writable by the container's user, `1000:1000` unless
+`HUMANS_UID`/`HUMANS_GID` say otherwise.
+
 ### Configuration
 
 Every value has a working default; these are the ones worth knowing.
@@ -55,6 +68,38 @@ Every value has a working default; these are the ones worth knowing.
 | `HUMANS_REQUIRE_CALLER_KEY` | `true` | Whether `/v1/*` requires a key |
 | `HUMANS_RATE_LIMIT_PER_MINUTE` | `60` | Per caller |
 | `HUMANS_TRUST_PROXY` | `false` | Whether `X-Forwarded-For` is believed |
+
+### Deploying it
+
+There is no deployment machinery here, on purpose: no orchestration, no migration
+tooling, no cluster. The whole of it is the compose file.
+
+```
+git clone <this repo> && cd humans
+printf 'HUMANS_ADMIN_KEY=%s\n' "$(openssl rand -hex 32)" > .env
+docker compose up -d --build
+```
+
+Then put a reverse proxy in front, because this service does not speak TLS and
+does not want to:
+
+```
+location / {
+    proxy_pass http://127.0.0.1:8484;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 700s;      # above HUMANS_CALL_TIMEOUT_MS, or a wait is a 502
+    proxy_buffering off;          # for stream: true
+}
+```
+
+Set `HUMANS_TRUST_PROXY=true` when you do, or every caller is rate-limited as
+127.0.0.1. Two operational notes worth more than they cost: back up `./data` (it
+is the ledger and the queue, and it is a directory so `rsync` is the whole
+procedure), and set `HUMANS_POOL_SATS` to what you have actually put aside before
+you point anyone at it — an unfunded guarantee is still a promise, and the console
+will say which it is either way.
 
 ## The API
 
@@ -146,8 +191,9 @@ starts being an oddity, so the semantics are written down rather than inferred.
 ## Testing
 
 ```
-npm test        # end-to-end over HTTP, against a real server and a real SQLite file
+npm test                        # end-to-end over HTTP, against a real server and a real SQLite file
 npm run typecheck
+scripts/container-smoke.sh      # builds the deployment image and drives it
 ```
 
 Tests cover the contract rather than the implementation: that a request is
@@ -160,6 +206,13 @@ matters more than it sounds: every other streaming test here parses the events
 with our own parser, so a wrong delta field name would be agreed on by our reader
 and our writer and pass. The vendor's client is the only instrument in the
 repository that can disagree with us.
+
+`test/docs.test.ts` checks the pages a reader is served rather than the documents
+they were built from: that every relative link now points somewhere on the site,
+that no `.md` path survives, and that a page renders as HTML rather than markup.
+The smoke test covers the rest of what a container changes: that the documents
+were copied in, that the console is served, and that a call without a key is
+refused rather than queued for a person to read.
 
 ## Licence
 

@@ -1,0 +1,36 @@
+# The deployment, as it runs on the box: one container, one SQLite file, and a
+# port bound to the loopback interface because TLS and the hostname are nginx's
+# business, not this service's.
+
+services:
+  humans:
+    build: .
+    image: humans:latest
+    container_name: humans
+    restart: unless-stopped
+    # Optional, so a checkout can be run without one: every value has a working
+    # default. A deployment supplies at least HUMANS_ADMIN_KEY.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8484"
+      HUMANS_DATA_DIR: /data
+    ports:
+      # Loopback only: nothing reaches this port without going through nginx.
+      # HUMANS_PORT moves the published port, not the listening one: the
+      # service always listens on 8484 inside, and a second instance on the same
+      # machine (a smoke test, say) publishes it elsewhere.
+      - "127.0.0.1:${HUMANS_PORT:-8484}:8484"
+    volumes:
+      # The ledger, the queue and the request bodies. A bind mount rather than a
+      # named volume so that a backup is a copy of a directory, inspectable by
+      # someone who is not the container.
+      - ./data:/data
+    user: "${HUMANS_UID:-1000}:${HUMANS_GID:-1000}"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

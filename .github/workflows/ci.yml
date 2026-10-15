@@ -24,3 +24,13 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  container:
+    # The tests above drive the service from Node. This drives the container
+    # that the deployment actually runs, because the difference between the two
+    # is where a deployment breaks: the base image, the documents copied in, the
+    # non-root user, the SQLite file on a mount.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: scripts/container-smoke.sh
