@@ -413,7 +413,9 @@ export class Queue {
     if (!waiter) return false;
     const response = buildResponse({
       id: row.id,
-      model: row.model,
+      // From the waiter, not the row: the row stores what the caller asked for,
+      // and the answer names the model that answered.
+      model: waiter.model,
       content,
       stopReason,
       stopSequence,

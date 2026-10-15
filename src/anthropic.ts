@@ -10,6 +10,10 @@ import { signingKey } from './secret.ts';
  * would reject is rejected here too, with the same shape of error. Being more
  * permissive would silently accept traffic that breaks the moment the base URL
  * points somewhere else.
+ *
+ * One deliberate exception, and it is the model id: the real API refuses a model
+ * it does not serve, while this one answers the request anyway and names the
+ * model that answered. See `resolveModel`.
  */
 
 export const ANTHROPIC_VERSION = '2023-06-01';
@@ -23,13 +27,6 @@ export const MODELS = [
 ] as const;
 
 export const DEFAULT_MODEL = 'human-1';
-
-/** Accepted aliases, mapped to a canonical id. */
-const MODEL_ALIASES: Record<string, string> = {
-  'human-1-0': 'human-1',
-  human: 'human-1',
-  'human-latest': 'human-1',
-};
 
 export const STOP_REASONS = [
   'end_turn',
@@ -145,15 +142,29 @@ function invalid(message: string): never {
   throw new RequestError(400, 'invalid_request_error', message);
 }
 
+/**
+ * Which model answers a request, given the id the caller asked for.
+ *
+ * Every id is answered by the same model, and that is a decision rather than an
+ * oversight. A client that hardcodes a model name is most clients, and refusing
+ * an id it was never told to change would put this service out of reach of every
+ * one of them; the id would have to be overridden in two places (a model and a
+ * small fast model) before anything could be pointed here at all.
+ *
+ * Refusing an unknown id also conceals nothing that answering does not state
+ * plainly: the response names the model that actually answered, which is
+ * human-1 whatever was asked for, and the console shows the person what the
+ * caller believed it was buying. A caller that reads the response learns the
+ * truth either way, and a caller that does not read it was never going to.
+ *
+ * A model field that is missing, empty or not a string is still refused, in
+ * `parseMessageRequest`: an unknown model is a routing question, a malformed
+ * one is a mistake in the request, and the two deserve different answers. This
+ * function is where per-caller routing would grow if there were ever more than
+ * one queue to route to.
+ */
 export function resolveModel(requested: string): string {
-  const alias = MODEL_ALIASES[requested];
-  if (alias) return alias;
-  if (MODELS.some((m) => m.id === requested)) return requested;
-  invalid(
-    `model: ${requested} not found. This endpoint serves ${MODELS.map((m) => m.id)
-      .map((id) => `"${id}"`)
-      .join(', ')}.`,
-  );
+  return MODELS.some((model) => model.id === requested) ? requested : DEFAULT_MODEL;
 }
 
 function isBlockArray(content: unknown): content is ContentBlock[] {
@@ -175,7 +186,6 @@ export function parseMessageRequest(body: unknown): MessageRequest {
   if (typeof raw.model !== 'string' || raw.model === '') {
     invalid('model: field required');
   }
-  resolveModel(raw.model);
 
   if (typeof raw.max_tokens !== 'number' || !Number.isInteger(raw.max_tokens) || raw.max_tokens < 1) {
     invalid('max_tokens: must be an integer of at least 1');

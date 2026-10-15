@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { harness, liveStream, messageRequest, readSse, until } from './helpers.ts';
+import type { MessageRequest } from '../src/anthropic.ts';
 
 /**
  * The contract, end to end over HTTP: a caller's request goes in, a person is
@@ -397,6 +398,50 @@ test('the operator API is closed without the admin key', async (t) => {
   const right = await h.call('/api/admin/overview', { headers: { 'x-admin-key': h.adminKey } });
   assert.equal(right.status, 200);
   assert.ok(right.body.stats, 'the overview reports queue state');
+});
+
+test('a model field that is missing, empty or not a string is still refused', async (t) => {
+  // An unfamiliar model is a routing question and is answered. A malformed one
+  // is a broken request, and the two get different answers: this is the control
+  // that keeps "we accept every id" from becoming "we accept anything".
+  const h = await harness();
+  t.after(() => h.close());
+
+  const malformed: unknown[] = [undefined, '', 42, null, { id: 'human-1' }];
+  for (const model of malformed) {
+    const response = await h.send(messageRequest({ model } as Partial<MessageRequest>));
+    assert.equal(response.status, 400, `model ${JSON.stringify(model)} should be refused`);
+    assert.equal(response.body.error.type, 'invalid_request_error');
+  }
+
+  // And the positive control, without which the loop above proves only that
+  // this endpoint refuses everything: an unfamiliar id goes through.
+  const pending = h.send(messageRequest({ model: 'gpt-4o' }));
+  const row = await h.awaitQueued();
+  assert.equal(row.model, 'gpt-4o');
+  await h.answer(row.id, { text: 'A person, not a GPT.' });
+
+  const response = await pending;
+  assert.equal(response.status, 200);
+  assert.equal(response.body.model, 'human-1');
+});
+
+test('a streaming caller is named the model that answered, not the one it asked for', async (t) => {
+  const h = await harness();
+  t.after(() => h.close());
+
+  const streamed = fetch(`${h.base}/v1/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': h.callerKey },
+    body: JSON.stringify(messageRequest({ model: 'claude-opus-4-1', stream: true, max_tokens: 64 })),
+  });
+
+  const row = await h.awaitQueued();
+  await h.answer(row.id, { text: 'Canberra.' });
+
+  const events = await readSse(await streamed);
+  const start = events.find((event) => event.event === 'message_start');
+  assert.equal(start?.data.message.model, 'human-1');
 });
 
 test('an unknown endpoint answers with an Anthropic-shaped error rather than HTML', async (t) => {

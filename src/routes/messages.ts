@@ -51,6 +51,10 @@ export function messagesRouter(store: Store, queue: Queue): Router {
 
   router.post('/v1/messages', requireCaller(store), rateLimit(), async (req: Request, res: Response) => {
     const request = parseMessageRequest(req.body);
+    // Two ids, and they are not the same id: `request.model` is what the caller
+    // asked for and is recorded as such, while `model` is what answers — always
+    // human-1 — and is what the response names. The row keeps the request, the
+    // envelope tells the truth.
     const model = resolveModel(request.model);
     const chars = requestTextLength(request);
     const inputTokens = estimateTokensFromChars(chars);
@@ -60,7 +64,7 @@ export function messagesRouter(store: Store, queue: Queue): Router {
     store.insertRequest({
       id,
       caller: req.caller?.name ?? null,
-      model,
+      model: request.model,
       requestJson: JSON.stringify(request),
       summary: summariseRequest(request, chars),
       toolsJson: JSON.stringify(request.tools ?? []),

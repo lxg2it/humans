@@ -70,6 +70,16 @@ Responder-facing, used by the console:
 Operator-facing: `/api/admin/*`, plus `npm run admin` for keys, what is owed, and
 recording settlements.
 
+### Model ids
+
+Any id in `model` is answered, and the response names the model that actually
+answered: `human-1`. Refusing an unfamiliar id would put this service out of
+reach of every client that hardcodes a model name, and it would conceal nothing,
+because the answer names who answered either way and the queue shows the
+responder what the caller asked for — which, for this service, is the
+interesting part. An id that is missing, empty or not a string is still a 400:
+an unfamiliar model is a routing question, a malformed one is a mistake.
+
 ## The streaming contract
 
 Streaming is where a human model stops being a substitute for a machine and

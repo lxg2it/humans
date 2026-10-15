@@ -208,24 +208,29 @@ test('the SDK reads a non-streaming answer through the same client', async (t) =
   assert.ok(message.usage.input_tokens > 0 && message.usage.output_tokens > 0, 'usage is reported');
 });
 
-test('a request the SDK sends with the wrong model is refused anthropically', async (t) => {
-  // The control: the client agreeing with us on the happy path proves nothing
-  // unless it also sees a refusal in the shape it expects.
+test('a model id we have never heard of is answered, and the answer says who answered', async (t) => {
+  // Not a refusal, and that is the decision: a client that hardcodes a model
+  // name is most clients, and an id it was never told to change would put this
+  // service out of reach of every one of them. What refusing was protecting is
+  // not lost — the response names the model that answered, which was never the
+  // one asked for — and the console shows the person what the caller thought it
+  // was buying, which for this service is the interesting part.
   const h = await harness({ callTimeoutMs: 60_000 });
   t.after(() => h.close());
 
   const request = client(h).messages.create({
-    model: 'no-such-model',
+    model: 'claude-sonnet-4-5',
     max_tokens: 1024,
     messages: [{ role: 'user', content: 'hello' }],
   });
 
-  await assert.rejects(request, (error: unknown) => {
-    const failure = error as { status?: number; error?: { error?: { type?: string } } };
-    assert.equal(failure.status, 400);
-    assert.equal(failure.error?.error?.type, 'invalid_request_error');
-    return true;
-  });
+  const row = await h.awaitQueued();
+  assert.equal(row.model, 'claude-sonnet-4-5', 'the queue records what the caller asked for');
+  await h.answer(row.id, { text: 'Still a person.' });
+
+  const message = await request;
+  assert.equal(textOf(message), 'Still a person.');
+  assert.equal(message.model, 'human-1', 'the answer names the model that answered');
 });
 
 test('an unanswerable request reaches the SDK as a timeout, not as silence', async (t) => {
