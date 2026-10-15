@@ -73,6 +73,7 @@ p { margin: 6px 0; }
 .meta { font-size: 12px; margin-top: 6px; }
 .clock { font-family: var(--mono); font-size: 22px; text-align: right; }
 .clock.warn { color: var(--warn); }
+#payout.warn { color: var(--warn); }
 .clock.bad { color: var(--bad); }
 .req-clock { text-align: right; flex: 0 0 auto; }
 

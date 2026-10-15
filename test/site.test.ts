@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { config } from '../src/config.ts';
 import { SOURCES } from '../src/docs.ts';
 import { NAV } from '../src/layout.ts';
+import { createPoolReader } from '../src/pool.ts';
 import { landingPage } from '../src/site.ts';
 import { publicStats } from '../src/stats.ts';
 import { harness, messageRequest } from './helpers.ts';
@@ -136,10 +137,13 @@ test('/api/stats publishes aggregates and nothing that identifies anyone', async
   }
 });
 
+/** The pool in its declared state: no address, so the figure is the operator's word. */
+const declaredPool = (sats: number) => createPoolReader({ address: null, declaredSats: sats }).read();
+
 test('the chart counts real traffic, and says so plainly when there is none', async () => {
   const h = await harness();
   try {
-    const empty = landingPage(publicStats(h.store));
+    const empty = landingPage(publicStats(h.store), declaredPool(0));
     assert.match(empty, /No calls yet/, 'an empty chart must say it is empty rather than look broken');
 
     // Not awaited yet: a caller's request does not return until a person
@@ -150,7 +154,7 @@ test('the chart counts real traffic, and says so plainly when there is none', as
     const sent = await pending;
     assert.equal(sent.status, 200, JSON.stringify(sent.body));
 
-    const drawn = landingPage(publicStats(h.store));
+    const drawn = landingPage(publicStats(h.store), declaredPool(0));
     assert.match(drawn, /\d{4}-\d{2}-\d{2} — 1 \/ 1<\/li>/, 'one call answered should read as one call and one answer');
     assert.doesNotMatch(drawn, /No calls yet/);
   } finally {

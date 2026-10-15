@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { normaliseAddress, validateAddress, validateTxid } from '../btc.ts';
 import { config } from '../config.ts';
 import type { Store } from '../db.ts';
 import type { Queue } from '../queue.ts';
@@ -101,6 +102,19 @@ export function adminRouter(store: Store, queue: Queue): Router {
     if (txid === '') {
       badRequest('txid: required — if there is no transaction id yet, the payment has not been made');
     }
+    // A settlement is the one part of this ledger claiming to be a record of
+    // something that happened rather than a promise, so both fields are checked
+    // rather than stored as typed. A settlement against a testnet address is the
+    // worst of the available mistakes: it looks complete on every screen, and no
+    // money can ever reach it.
+    const destination = validateAddress(address);
+    if (!destination.valid) {
+      badRequest(`address: that is not a Bitcoin address (${destination.reason})`);
+    } else if (destination.info.network !== 'mainnet') {
+      badRequest('address: that is a testnet address, and the satoshis here are mainnet ones');
+    }
+    const tx = validateTxid(txid);
+    if (!tx.valid) badRequest(`txid: ${tx.reason}`);
     const owed = store.earnings(responder).owedSats;
     if (owed <= 0) {
       conflict(`${responder} is not owed anything (earned ${store.earnings(responder).earnedSats}, paid ${store.earnings(responder).paidSats})`);
@@ -110,8 +124,8 @@ export function adminRouter(store: Store, queue: Queue): Router {
       responder,
       kind: 'settlement',
       sats: sats as number,
-      address,
-      txid,
+      address: normaliseAddress(destination.info.address),
+      txid: txid.toLowerCase(),
       note: note === '' ? null : note,
     });
     res.status(201).json({ recorded: true, responder, sats, remaining_owed: store.earnings(responder).owedSats });

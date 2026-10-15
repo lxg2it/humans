@@ -20,6 +20,16 @@
         <span id="earnings" title="earned / paid / owed"></span>
         <button id="signout" class="link">sign out</button>
       </div>
+      <div class="who" id="payout-line" hidden>
+        <span id="payout"></span>
+        <button id="payout-edit" class="link">set an address</button>
+        <form id="payout-form" hidden>
+          <input id="payout-input" type="text" spellcheck="false" autocomplete="off" maxlength="90"
+            placeholder="bc1…" aria-label="Bitcoin address to be paid at" />
+          <button type="submit" class="link">save</button>
+          <button type="button" class="link" id="payout-cancel">cancel</button>
+        </form>
+      </div>
     </header>
 
     <!-- Key entry. The only screen that exists before we know who you are. -->

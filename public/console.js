@@ -90,6 +90,7 @@
       $('gate-error').hidden = true;
       $('main').hidden = false;
       $('who').hidden = false;
+      $('payout-line').hidden = false;
       $('responder-name').textContent = me.name;
       $('instance').textContent = document.title = location.host;
       $('conn').className = 'dot live';
@@ -112,24 +113,113 @@
     $('earnings').textContent =
       `${earnings.replies} answered · ${owed.toLocaleString()} sats owed${rated}`;
     $('earnings').title = `earned ${earnings.earnedSats} · paid ${earnings.paidSats} · owed ${owed}`;
+
+    // Where it would go, said next to how much there is, so a person notices a
+    // missing or stale address at the moment they are thinking about the money
+    // rather than when a settlement fails to arrive.
+    const payout = $('payout');
+    if (me.payout_address) {
+      payout.textContent = `paid to ${me.payout_address}`;
+      payout.className = 'muted small';
+    } else {
+      payout.textContent = 'no payout address set — anything owed is held, not lost';
+      payout.className = 'muted small warn';
+    }
   }
 
+  /**
+   * Setting the address you would be paid at.
+   *
+   * Deliberately a small form rather than a browser prompt: an address is 42-62
+   * characters of a script with no redundancy in it, and a prompt gives you one
+   * line to paste into with no way to see what you have. The server validates;
+   * this only shows what it says.
+   */
+  function initPayoutEditor() {
+    const form = $('payout-form');
+    const input = $('payout-input');
+    const edit = $('payout-edit');
+
+    edit.addEventListener('click', () => {
+      input.value = me.payout_address || '';
+      form.hidden = false;
+      edit.hidden = true;
+      input.focus();
+    });
+
+    $('payout-cancel').addEventListener('click', () => {
+      form.hidden = true;
+      edit.hidden = false;
+      renderEarnings(me.earnings);
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const result = await api('/api/me/payout-address', {
+          method: 'POST',
+          body: { address: input.value.trim() },
+        });
+        me.payout_address = result.payout_address;
+        form.hidden = true;
+        edit.hidden = false;
+        renderEarnings(me.earnings);
+      } catch (error) {
+        $('payout').textContent = error.message;
+        $('payout').className = 'muted small warn';
+      }
+    });
+  }
+
+  /** "4 minutes ago", for a reading whose age is part of what it means. */
+  function age(at) {
+    const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
+    if (seconds < 90) return 'just now';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} minutes ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 36) return `${hours} hours ago`;
+    return `${Math.round(hours / 24)} days ago`;
+  }
+
+  /**
+   * The state of the fund, said before anybody picks up a call.
+   *
+   * The order of these branches is the whole function. `pool_sats` is null when
+   * the instance reads its balance from the chain and the chain could not be
+   * reached, and null must not fall through to the empty-pool sentence: "nobody
+   * knows" told as "there is nothing" is the one lie this service cannot afford,
+   * because it is the sentence a person reads while deciding whether to work.
+   */
   function renderPoolNote() {
     if (!me) return;
     const note = $('pool-note');
     note.textContent = '';
-    if (me.pool_sats <= 0) {
+    const owed = me.earnings.owedSats;
+    const reading = me.pool_read_at === null ? '' : ` (read ${age(me.pool_read_at)})`;
+
+    if (me.pool_sats === null) {
       note.textContent =
-        `The guarantee is ${me.guarantee_sats} sats per reply, and the pool is empty: the promise is recorded but unfunded.`;
+        `The guarantee is ${me.guarantee_sats} sats per reply. The pool balance could not be read` +
+        `${me.pool_error ? ` — ${me.pool_error}` : ''}, so whether it is funded is unknown right now. ` +
+        `That is a missing figure, not an empty one.`;
       note.className = 'warn';
-    } else if (me.pool_sats < me.earnings.owedSats) {
-      note.textContent = `Pool ${me.pool_sats} sats, already owed ${me.earnings.owedSats}. The guarantee is not fully covered.`;
+    } else if (me.pool_sats <= 0) {
+      note.textContent =
+        `The guarantee is ${me.guarantee_sats} sats per reply, and the pool is empty${reading}: the promise is recorded but unfunded.`;
+      note.className = 'warn';
+    } else if (me.pool_sats < owed) {
+      note.textContent =
+        `Pool ${me.pool_sats.toLocaleString()} sats${reading}, already owed ${owed.toLocaleString()}. The guarantee is not fully covered.`;
       note.className = 'warn';
     } else {
-      note.textContent = `Guaranteed ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats}.`;
+      note.textContent =
+        `Guaranteed ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats.toLocaleString()} sats${reading}.`;
       note.className = '';
     }
   }
+
+  initPayoutEditor();
 
   // ---- queue ---------------------------------------------------------------
 

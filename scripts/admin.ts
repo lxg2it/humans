@@ -7,6 +7,7 @@
  * it to a terminal rather than to a log.
  */
 import { join } from 'node:path';
+import { validateAddress, validateTxid } from '../src/btc.ts';
 import { config } from '../src/config.ts';
 import { Store } from '../src/db.ts';
 
@@ -86,6 +87,20 @@ switch (command) {
     const [responder, satsRaw, address, txid, ...noteParts] = args;
     const sats = Number(satsRaw);
     if (!responder || !Number.isInteger(sats) || sats <= 0 || !address || !txid) usage();
+    const destination = validateAddress(address);
+    if (!destination.valid) {
+      console.error(`that is not a Bitcoin address: ${destination.reason}`);
+      process.exit(2);
+    }
+    if (destination.info.network !== 'mainnet') {
+      console.error('that is a testnet address, and the satoshis here are mainnet ones');
+      process.exit(2);
+    }
+    const transaction = validateTxid(txid);
+    if (!transaction.valid) {
+      console.error(`that is not a transaction id: ${transaction.reason}`);
+      process.exit(2);
+    }
     const before = store.earnings(responder);
     if (before.earnedSats === 0) {
       console.error(`${responder} has no ledger entries; refusing to record a payment to an unknown responder`);

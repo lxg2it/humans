@@ -1,6 +1,9 @@
 import { config } from './config.ts';
 import { chart } from './chart.ts';
 import { REPOSITORY, escapeAttribute, escapeText, page } from './layout.ts';
+import { describeAge } from './pool.ts';
+import { formatBtc } from './btc.ts';
+import type { PoolReading } from './pool.ts';
 import { SOLVER_SCRIPT } from './signup.ts';
 import type { Challenge, SignupKind } from './signup.ts';
 import type { PublicStats } from './stats.ts';
@@ -53,10 +56,73 @@ function thankYou(): string {
   );
 }
 
+/**
+ * The one place the state of the fund is put into words, so the front page, the
+ * answering page and the pool page cannot disagree about it.
+ *
+ * Returns nothing at all when there is nothing to flag, which is most of the
+ * time and is the point: a warning that appears when the money is fine is a
+ * warning nobody reads when it is not.
+ *
+ * The case that earns this function its existence is `sats === null` — the chain
+ * could not be read. Every naive implementation renders that as zero, and "we do
+ * not know" written as "there is nothing" is the single most load-bearing lie
+ * this project could tell.
+ */
+function poolNote(pool: PoolReading): string {
+  const warn = (html: string): string => `<p class="note-warn">${html}</p>`;
+
+  if (pool.declared) {
+    if (pool.sats !== null && pool.sats <= 0) {
+      return warn(
+        `<strong>The pool is empty.</strong> ${config.poolSats} satoshis have been set aside, so the guarantee ` +
+          `above is recorded and unfunded. The console says the same thing, in the same words, before anybody ` +
+          `picks up a call. This figure is the operator&rsquo;s word rather than a reading — no address is ` +
+          `configured on this instance, so there is nothing here anyone can check.`,
+      );
+    }
+    return '';
+  }
+
+  if (pool.sats === null) {
+    return warn(
+      `<strong>The fund cannot be read.</strong> This instance has a pool address, and the balance has not been ` +
+        `successfully read from the chain${pool.error ? ` (${escapeText(pool.error)})` : ''}. That is a missing ` +
+        `number, not a zero, and it is not being shown as one.`,
+    );
+  }
+
+  if (pool.sats <= 0) {
+    return warn(
+      `<strong>The pool is empty.</strong> The address holds nothing as of the last reading, so the guarantee is ` +
+        `recorded and unfunded. The console says the same thing, before anybody picks up a call.`,
+    );
+  }
+
+  return '';
+}
+
+/** A reading, said out loud with the age attached, because a stale number that looks current is a lie. */
+function poolBalanceSentence(pool: PoolReading): string {
+  if (pool.declared) {
+    return `${config.poolSats} satoshis, as set aside by the operator. Declared rather than measured: this ` +
+      `instance has no pool address configured, so nobody outside it can check the figure.`;
+  }
+  if (pool.sats === null) {
+    return `Never read. This instance has a pool address and the balance has not once been fetched from the chain.`;
+  }
+  const when = pool.readAt === null ? 'at an unknown time' : describeAge(pool.readAt);
+  const age = `read from the chain ${when}`;
+  if (pool.error) {
+    return `${pool.sats.toLocaleString()} satoshis, ${age} — the chain could not be reached just now ` +
+      `(${pool.error}), so this figure is the last one that could be.`;
+  }
+  return `${pool.sats.toLocaleString()} satoshis, ${age}.`;
+}
+
 // ---- the front door --------------------------------------------------------
 
-export function landingPage(stats: PublicStats): string {
-  const unfunded = config.poolSats <= 0;
+export function landingPage(stats: PublicStats, pool: PoolReading): string {
 
   const spec: ReadonlyArray<readonly [string, string]> = [
     ['Model id', '<code>human-1</code>. You may send <em>any</em> id; the response names the model that answered.'],
@@ -140,13 +206,7 @@ export function landingPage(stats: PublicStats): string {
               names of their products are trademarks of their respective owners. Compatibility here means the wire
               format — the same HTTP and the same JSON — and nothing else.</li>
             </ol>
-            ${
-              unfunded
-                ? `<p class="note-warn"><strong>The pool is empty.</strong> ${config.poolSats} satoshis have been set
-              aside, so the guarantee above is recorded and unfunded. The console says the same thing, in the same
-              words, before anybody picks up a call.</p>`
-                : ''
-            }
+            ${poolNote(pool)}
             <p class="closing">That is the summary. The <a href="/disclaimer">disclaimer</a> is the one that counts,
             <a href="/money">the money</a> says the rest about the satoshis, and
             <a href="/answering">answering calls</a> is written for whoever is at the console.</p>
@@ -200,8 +260,7 @@ ${rows}
 
 // ---- the console side ------------------------------------------------------
 
-export function answerPage(): string {
-  const unfunded = config.poolSats <= 0;
+export function answerPage(pool: PoolReading): string {
 
   const seen: ReadonlyArray<readonly [string, string]> = [
     [
@@ -274,15 +333,10 @@ ${rows}
           <p class="body">The ledger records a guarantee when an answer is submitted and a settlement when the
           operator actually pays, and the console shows the promise and the money behind it as two separate
           facts.</p>
-          ${
-            unfunded
-              ? `<p class="note-warn"><strong>The guarantee is currently unfunded.</strong> The pool holds
-              ${config.poolSats} satoshis, so an answer is recorded and owed and the money is not there yet. The
-              console says so before you pick up a call, and holding the record of a promise you are not keeping
-              would be worse than never having made it. <a href="/money">The money</a> is explicit about this.</p>`
-              : `<p class="body">The pool holds <strong>${config.poolSats} satoshis</strong> against guarantees of
-              ${config.guaranteeSats} per answer.</p>`
-          }
+          ${poolNote(pool)}
+          <p class="body">What is held against the guarantee: <strong>${poolBalanceSentence(pool)}</strong>
+          <a href="/pool">The fund</a> has the address and the arithmetic, and
+          <a href="/money">the money</a> is explicit about what that figure is and is not.</p>
           <p class="body">If you fork this and run it as a real service with real expectations on people&rsquo;s
           time, you are not running this project, you are running its parody. Pay people properly, in a currency,
           under an actual agreement. Being small does not make it honest.</p>`,
@@ -322,6 +376,117 @@ ${rows}
 }
 
 // ---- the caller side -------------------------------------------------------
+
+/**
+ * Where the fund lives, what is in it, and what a donation is not.
+ *
+ * This page exists because the guarantee needs somewhere to come from, and
+ * because "the pool is empty" was, until now, an unverifiable sentence. It is
+ * written flat on purpose: it is not a tip jar, it does not ask for anything,
+ * and every claim on it is either read from the chain or attributed to the
+ * operator as a claim.
+ */
+export function poolPage(pool: PoolReading, owedSats: number): string {
+  const address = pool.address;
+
+  const where = address
+    ? `          <p class="label">The address</p>
+          <pre id="address"><code>${escapeText(address)}</code></pre>
+          <div class="cta">
+            <button id="copy" class="btn" type="button">Copy it</button>
+          </div>
+          <p class="muted small">On the Bitcoin mainnet. Check it against your own wallet before you send: an
+          address is the one field where a typo is not recoverable, and there is nobody here who can reverse a
+          transfer.</p>
+          <script>
+            document.getElementById('copy').addEventListener('click', function () {
+              var text = document.getElementById('address').textContent;
+              navigator.clipboard.writeText(text).then(
+                function () { document.getElementById('copy').textContent = 'Copied'; },
+                function () { document.getElementById('copy').textContent = 'Select it by hand, then'; },
+              );
+            });
+          </script>`
+    : `          <p class="note-warn"><strong>There is nowhere to send anything.</strong> This instance has no pool
+          address configured, so it cannot accept a donation at all. The figure it prints elsewhere is the
+          operator&rsquo;s word, and this page will not dress that up as a wallet.</p>`;
+
+  const arithmetic = address
+    ? `          <ul class="plain">
+            <li><strong>Held:</strong> ${poolBalanceSentence(pool)}${
+              pool.sats === null ? '' : ` That is ${formatBtc(pool.sats)} BTC.`
+            }</li>
+            <li><strong>Ever received:</strong> ${
+              pool.receivedSats === null
+                ? 'not read'
+                : `${pool.receivedSats.toLocaleString()} satoshis${
+                    pool.txCount === null ? '' : ` over ${pool.txCount} transaction${pool.txCount === 1 ? '' : 's'}`
+                  }`
+            }</li>
+            <li><strong>Paid out:</strong> ${
+              pool.spentSats === null ? 'not read' : `${pool.spentSats.toLocaleString()} satoshis`
+            }</li>
+            <li><strong>Owed now:</strong> ${owedSats.toLocaleString()} satoshis, across everybody who has answered
+            and not been paid yet</li>
+          </ul>
+          <p class="muted small">The address shown is a plain address rather than a new one per donor, so two
+          people sending to it are two payments into one account and nothing distinguishes them but the time and
+          the amount. That is a limitation, said here rather than left to be noticed.</p>`
+    : '';
+
+  return page({
+    title: 'The fund',
+    description:
+      'The account the guarantee is paid from: what it holds, read from the chain rather than typed in, and what giving to it does and does not buy.',
+    styles: ['/shell.css', '/site.css'],
+    current: '/pool',
+    mainId: 'site',
+    body: [
+      band(
+        `          <p class="eyebrow">the fund</p>
+          <h1 class="headline">Where the sats come from.</h1>
+          <p class="lede">Nothing is charged to callers, so there is no revenue and no wage. Every answer still
+          carries a guarantee of ${config.guaranteeSats} satoshis to whoever wrote it, and that comes out of this:
+          the operator&rsquo;s own money, and anything anyone chooses to add to it.</p>`,
+      ),
+      band(
+        `          <h2 class="sec">The account</h2>
+${where}
+${arithmetic}`,
+      ),
+      band(
+        `          <h2 class="sec">What putting something in it does, and does not do</h2>
+          <ul class="plain">
+            <li><strong>It is a gift.</strong> Not a purchase, not a subscription, not a loan, and nothing is owed
+            back. It goes to ${escapeText(config.operator)} earmarked for the guarantee, which is what it will be
+            spent on or left in.</li>
+            <li><strong>It buys no influence.</strong> Not priority in the queue, not an answer, not a faster one,
+            not a change to these rules, and not a say in what gets built. Whoever is at the console answers what
+            is in front of them and neither knows nor cares who funded the pool.</li>
+            <li><strong>It does not pay anyone to be here.</strong> The guarantee is a thank-you scale, not a
+            rate, and the moment it starts to matter to somebody the answer is that they should stop, not that the
+            number should go up. That is written out at length in <a href="/money">the money</a>.</li>
+            <li><strong>It is not an investment, a security, a deposit or a charity.</strong> Nothing here is
+            tax-deductible, satoshis are volatile and may be worth nothing, and any tax consequence belongs to
+            whoever sends or receives them.</li>
+            <li><strong>If you want to give to a person, give to the person.</strong> Nobody is collecting on
+            behalf of anyone else here.</li>
+          </ul>`,
+      ),
+      band(
+        `          <h2 class="sec">Why the number can be trusted, or cannot</h2>
+          <p class="body">The balance above is read from a public indexer at the time printed beside it, not typed
+          into a configuration file, and the address is the one the instance will be paid into. Anyone can check
+          both, which is the point: a figure that only the operator can see is a claim, and this whole service is
+          an argument about the difference.</p>
+          <p class="body">It is also a plain reading of one address. It says nothing about money held anywhere
+          else, and the operator may add to the pool from a wallet this page never sees.</p>
+          <p class="closing">That is the account. <a href="/money">The money</a> is the longer version, and
+          <a href="/disclaimer">the disclaimer</a> is the one that counts.</p>`,
+      ),
+    ].join('\n'),
+  });
+}
 
 export function buildPage(): string {
   const base = config.publicUrl === '' ? 'https://humans.lxg2it.com' : config.publicUrl.replace(/\/$/, '');
@@ -565,6 +730,17 @@ export function signupPage(
                 ? 'Optional, and it only ever appears in the ledger. A caller is a key, not an account.'
                 : 'This is the <code>model</code> field of the reply, and it is what the caller is told answered them.'
             }</p>
+            ${
+              caller
+                ? ''
+                : `<label class="label" for="payout_address">Where to send the thank-you (optional)</label>
+            <input id="payout_address" name="payout_address" type="text" maxlength="90" autocomplete="off"
+              spellcheck="false" placeholder="bc1..." />
+            <p class="muted small">A Bitcoin address on mainnet. Leave it blank and you lose nothing but the
+            satoshis: the <a href="/money">money</a> is a thank-you rather than a wage, and the console will tell
+            you if anything is owed. You can set or change this later from the console, so a wallet you rotate
+            next year is not a wallet you are stuck with.</p>`
+            }
             <div class="human">
               <input type="checkbox" id="human" disabled />
               <label for="human">I am a human</label>
@@ -633,7 +809,12 @@ export function signupPage(
  * same property that makes a lost key unrecoverable, and it is stated rather
  * than discovered.
  */
-export function signupResultPage(kind: SignupKind, name: string, key: string): string {
+export function signupResultPage(
+  kind: SignupKind,
+  name: string,
+  key: string,
+  payoutAddress: string | null = null,
+): string {
   const caller = kind === 'caller';
 
   const hero = band(
@@ -653,6 +834,17 @@ export function signupResultPage(kind: SignupKind, name: string, key: string): s
           <p class="muted small">Answered as <strong>${escapeText(name)}</strong>${
             caller ? '' : ', which is the name the caller will be shown'
           }.</p>
+          ${
+            caller
+              ? ''
+              : `<p class="muted small">${
+                  payoutAddress === null
+                    ? 'No address, so nothing can be sent to you yet. Set one in the console whenever you want one — ' +
+                      'until then anything owed is simply held.'
+                    : `The thank-you goes to <code>${escapeText(payoutAddress)}</code>. If that is wrong, change it ` +
+                      'in the console before anything is owed.'
+                }</p>`
+          }
           <script>
             document.getElementById('copy').addEventListener('click', function () {
               var text = document.getElementById('key').textContent;

@@ -51,6 +51,7 @@ export const NAV: readonly NavEntry[] = [
   { href: '/console', label: 'console' },
   { href: '/disclaimer', label: 'disclaimer' },
   { href: '/money', label: 'the money' },
+  { href: '/pool', label: 'the fund' },
   { href: '/answering', label: 'answering' },
 ];
 

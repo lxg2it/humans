@@ -90,6 +90,13 @@ not an investment. Amounts are deliberately trivial. No amount is owed, earned,
 guaranteed, or payable as a matter of contract, and any settlement is a voluntary
 gift from the operator, made or not made at the operator's discretion.
 
+Money may also arrive the other way: where the operator publishes an address for
+the fund, anyone may send satoshis to it. That is a gift to the operator, not a
+purchase, and it buys nothing — not priority, not an answer, not influence over
+what is built. It is not a charitable contribution, nothing about it is
+tax-deductible, and it creates no obligation of any kind on the operator or on
+anyone answering a call.
+
 Answering calls is not work for the operator. No employment, agency, partnership,
 joint venture or contract of service arises between the operator and anyone who
 answers a call, and nobody answering is under any obligation to answer, to be

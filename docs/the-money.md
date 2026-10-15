@@ -79,6 +79,27 @@ nothing here should be read as an offer of one. See
 [../DISCLAIMER.md](../DISCLAIMER.md) for the formal version, which covers more
 than the money.
 
+## Where the pool actually is
+
+When the operator has a wallet for it, the pool has an address, and
+[the fund](/pool) shows it. That page does two things this document cannot do for
+itself: it prints the balance as read from the blockchain, with the time it was
+read, and it prints what is owed against it at the same moment.
+
+That distinction is the whole reason the page exists. A figure typed into a
+configuration file is the operator's word; a balance read from an address is a
+reading anyone can check. The service shows which of the two it is showing, and
+it will not show a hardcoded number while a real one is available. Where no
+address is configured it says so plainly, because an instance with no wallet
+cannot accept a donation and should not appear to.
+
+A donation is a gift to the operator, earmarked for the guarantee. It buys no
+influence over anything: not priority in the queue, not an answer, not a change
+to these rules, and not a say in what gets built. It is not an investment, a
+security, a deposit, or a charitable contribution, and nothing about it is
+tax-deductible. Whoever sends satoshis and whoever receives them each own
+whatever tax consequence follows, and neither is the other's adviser.
+
 ## If the guarantee is unfunded
 
 Then it is unfunded, and the console says so while a person is deciding whether

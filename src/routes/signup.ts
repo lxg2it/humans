@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { Store } from '../db.ts';
+import { validateAddress, normaliseAddress } from '../btc.ts';
 import { CHALLENGE_MAX_AGE_MS, checkSolution, issueChallenge } from '../signup.ts';
 import type { SignupKind } from '../signup.ts';
 import { signupPage, signupResultPage } from '../site.ts';
@@ -84,7 +85,45 @@ export function signupRouter(store: Store): Router {
     }
     if (text.length > 64) return { ok: false, reason: 'that name is longer than 64 characters' };
     if (/[\u0000-\u001f\u007f]/.test(text)) return { ok: false, reason: 'that name contains control characters' };
+    // One name, one person. Everything on the money side is keyed by this
+    // string — the ledger's `responder` column, earnings(), the settle command —
+    // so a second person answering under a taken name would have their earnings
+    // added to someone else's and any settlement paid into someone else's
+    // address. That was survivable while an operator minted every key by hand
+    // and would have noticed; it is not survivable with an open form.
+    if (kind === 'responder' && store.responderNameTaken(text)) {
+      return {
+        ok: false,
+        reason:
+          `somebody is already answering as "${text}". That name is the model name callers see, and it is what ` +
+          `the ledger keys earnings by, so it has to be yours alone. Pick another one.`,
+      };
+    }
     return { ok: true, name: text };
+  }
+
+  /**
+   * Where a responder wants to be paid, if they have said.
+   *
+   * Optional, and deliberately so: reading the queue should not require handing
+   * over a financial address, and the money is a thank-you rather than a wage.
+   * A responder with no address is simply a responder who cannot be paid yet,
+   * which the console says plainly rather than refusing them a seat.
+   *
+   * Mainnet only. A testnet address here would be accepted by a validator, look
+   * completely normal in the ledger, and send real satoshis nowhere — so the
+   * network is checked rather than assumed.
+   */
+  function addressOf(raw: unknown, kind: SignupKind): { ok: true; address: string | null } | { ok: false; reason: string } {
+    if (kind !== 'responder') return { ok: true, address: null };
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (text === '') return { ok: true, address: null };
+    const result = validateAddress(text);
+    if (!result.valid) return { ok: false, reason: `that address is not one: ${result.reason}` };
+    if (result.info.network !== 'mainnet') {
+      return { ok: false, reason: 'that is a testnet address. Payments here are real, so it has to be a real address.' };
+    }
+    return { ok: true, address: normaliseAddress(result.info.address) };
   }
 
   router.get('/signup', (req: Request, res: Response) => {
@@ -150,9 +189,16 @@ export function signupRouter(store: Store): Router {
       return;
     }
 
+    const paid = addressOf(form.payout_address, kind);
+    if (!paid.ok) {
+      res.status(400).type('html').send(signupPage(kind, issueChallenge(now), { status: 400, text: paid.reason }));
+      return;
+    }
+
     spent.set(seed, Number(form.issued) + CHALLENGE_MAX_AGE_MS);
     const minted = store.mintCredential(kind, named.name);
-    res.status(201).type('html').send(signupResultPage(kind, named.name, minted.key));
+    if (paid.address !== null) store.setPayoutAddress(minted.id, paid.address);
+    res.status(201).type('html').send(signupResultPage(kind, named.name, minted.key, paid.address));
   });
 
   return router;

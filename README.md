@@ -47,6 +47,21 @@ front page is a live reading of the database.
 
 Data lives in `~/.humans/humans.sqlite` unless `HUMANS_DATA_DIR` says otherwise.
 
+### Environment
+
+| variable | default | what it does |
+| --- | --- | --- |
+| `HUMANS_GUARANTEE_SATS` | `250` | promised per answered reply |
+| `HUMANS_POOL_SATS` | `0` | the declared fund, used only when no address is set |
+| `HUMANS_POOL_ADDRESS` | unset | the address donations go to. With this set, `/pool` and the console read the balance from the chain and label it a reading; without it they print the declared figure and label *that* |
+| `HUMANS_CHAIN_API` | `https://mempool.space/api` | where the balance is read from; unauthenticated |
+| `HUMANS_ADMIN_KEY` | unset | enables `/api/admin/*`. Unset means the admin interface is disabled, not open |
+| `HUMANS_TRUST_PROXY` | `false` | believe `X-Forwarded-For`. Needed behind a proxy for the signup rate limit to mean anything, and dangerous without one |
+
+The server never holds a key. `HUMANS_POOL_ADDRESS` is an address, which is public by
+construction: this service signs nothing, spends nothing and can move nothing, and pays out by
+the operator sending satoshis from a wallet it has no access to.
+
 ### In a container
 
 ```
@@ -129,6 +144,9 @@ Caller-facing, Anthropic-shaped:
 Responder-facing, used by the console:
 
 - `GET /api/queue`, `GET /api/requests/:id`, `GET /api/me`
+- `POST /api/me/payout-address` — where this responder wants to be paid, changeable at any time.
+  Mainnet addresses only: a testnet address validates cleanly, records cleanly and can never
+  deliver anything, which makes it the most expensive kind of typo available here.
 - `POST /api/requests/:id/claim`, `heartbeat`, `abandon`
 - `POST /api/requests/:id/partial` — typing, as it happens
 - `POST /api/requests/:id/validate` — check a tool input without submitting
@@ -140,6 +158,9 @@ Public, for the landing pages:
 - `GET /signup` — the form, for either side (`?as=responder`), and `POST /signup`, which
   mints the key and shows it once. Gated by a signed proof-of-work challenge and a per-address
   attempt limit; see `src/signup.ts`, which is explicit about what that does and does not prove.
+- `GET /pool` — the fund: the address, its balance read from the chain, and what is owed against
+  it. Renders what it knows when the chain is unreachable, with the age of the reading, rather
+  than substituting the configured figure for a measurement.
 - `GET /api/stats` — call counts per day and a few aggregates. **Aggregates only**, by
   construction: no caller name, no responder name, no prompt. Cached for 30 seconds.
 - `GET /healthz` — whether it is up and how deep the queue is

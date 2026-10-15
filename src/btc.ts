@@ -222,64 +222,101 @@ export function normaliseAddress(address: string): string {
 
 // ---- chain read -----------------------------------------------------------
 
-export interface ChainBalance {
+export interface ChainStats {
   ok: boolean;
   address: string;
+  /**
+   * Received minus spent, which is the only one of these that answers "how much
+   * is in there now". `receivedSats` is kept alongside it because it answers a
+   * different question — how much has ever passed through — and because a pool
+   * page that showed received as the balance would go on claiming money that had
+   * already been paid out. That is the defect this pair of fields exists to make
+   * unrepresentable.
+   */
+  balanceSats: number | null;
   receivedSats: number | null;
+  spentSats: number | null;
   txCount: number | null;
   error?: string;
 }
 
-interface MempoolAddressResponse {
-  chain_stats?: { funded_txo_sum?: number; funded_txo_count?: number };
-  mempool_stats?: { funded_txo_sum?: number; funded_txo_count?: number };
+interface MempoolStats {
+  funded_txo_sum?: number;
+  spent_txo_sum?: number;
+  tx_count?: number;
 }
 
-const cache = new Map<string, { at: number; value: ChainBalance }>();
-const CACHE_TTL_MS = 60_000;
+interface MempoolAddressResponse {
+  chain_stats?: MempoolStats;
+  mempool_stats?: MempoolStats;
+}
 
 /**
- * Reads how much an address has ever received. Unauthenticated, and the failure
- * mode is surfaced rather than swallowed: "we could not reach the chain" and
- * "nobody has sent anything" are different statements and the page says which.
+ * The bit of fetch this needs, so a test can answer without a network and
+ * without replacing a global that another test might be relying on.
  */
-export async function fetchReceived(address: string, apiBase: string): Promise<ChainBalance> {
-  const cached = cache.get(address);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
+export type Fetcher = (
+  url: string,
+  init?: { signal?: AbortSignal; headers?: Record<string, string> },
+) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
-  let value: ChainBalance;
+const defaultFetcher: Fetcher = (url, init) => fetch(url, init);
+
+/**
+ * Reads an address from a public indexer. Unauthenticated, and the failure mode
+ * is surfaced rather than swallowed: "we could not reach the chain" and "nobody
+ * has sent anything" are different statements, and a page that renders both as
+ * zero is lying about one of them.
+ *
+ * Mempool counts are included and subtracted, so an outgoing payment shows up as
+ * spent the moment it is broadcast rather than when it confirms: a pool that
+ * advertised money already on its way out would be advertising money twice.
+ */
+export async function fetchAddressStats(
+  address: string,
+  apiBase: string,
+  fetcher: Fetcher = defaultFetcher,
+): Promise<ChainStats> {
+  const empty = { address, balanceSats: null, receivedSats: null, spentSats: null, txCount: null };
   try {
-    const res = await fetch(`${apiBase.replace(/\/$/, '')}/address/${encodeURIComponent(address)}`, {
+    const res = await fetcher(`${apiBase.replace(/\/$/, '')}/address/${encodeURIComponent(address)}`, {
       signal: AbortSignal.timeout(8000),
       headers: { accept: 'application/json' },
     });
     if (!res.ok) {
-      value = {
-        ok: false,
-        address,
-        receivedSats: null,
-        txCount: null,
-        error: `chain API returned ${res.status}`,
-      };
-    } else {
-      const body = (await res.json()) as MempoolAddressResponse;
-      const received =
-        (body.chain_stats?.funded_txo_sum ?? 0) + (body.mempool_stats?.funded_txo_sum ?? 0);
-      const count =
-        (body.chain_stats?.funded_txo_count ?? 0) + (body.mempool_stats?.funded_txo_count ?? 0);
-      value = { ok: true, address, receivedSats: received, txCount: count };
+      return { ok: false, ...empty, error: `chain API returned ${res.status}` };
     }
-  } catch (err) {
-    value = {
-      ok: false,
+    const body = (await res.json()) as MempoolAddressResponse;
+    const funded = (body.chain_stats?.funded_txo_sum ?? 0) + (body.mempool_stats?.funded_txo_sum ?? 0);
+    const spent = (body.chain_stats?.spent_txo_sum ?? 0) + (body.mempool_stats?.spent_txo_sum ?? 0);
+    const count = (body.chain_stats?.tx_count ?? 0) + (body.mempool_stats?.tx_count ?? 0);
+    return {
+      ok: true,
       address,
-      receivedSats: null,
-      txCount: null,
-      error: err instanceof Error ? err.message : 'unknown chain error',
+      balanceSats: funded - spent,
+      receivedSats: funded,
+      spentSats: spent,
+      txCount: count,
     };
+  } catch (err) {
+    return { ok: false, ...empty, error: err instanceof Error ? err.message : 'unknown chain error' };
   }
-  cache.set(address, { at: Date.now(), value });
-  return value;
+}
+
+/**
+ * A transaction id, as it appears in a block explorer.
+ *
+ * Settlements are the record of transfers that actually happened, so a "sent"
+ * or a "pending" in this field is a false entry in the only part of the ledger
+ * that claims to be a fact rather than a promise. Sixty-four hex characters is
+ * what a txid is; anything else is not one.
+ */
+export function validateTxid(txid: string): { valid: true } | { valid: false; reason: string } {
+  const trimmed = txid.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(trimmed)) {
+    return { valid: false, reason: 'a transaction id is 64 hexadecimal characters' };
+  }
+  return { valid: true };
 }
 
 export function formatBtc(sats: number): string {

@@ -86,22 +86,35 @@ test('a link to a document we serve becomes a link to its page', () => {
   );
 });
 
-test('every link in the real documents resolves, and none of them is left pointing at a file', () => {
+test('every link in the real documents resolves, and none of them is left pointing at a file', async () => {
   // The documents are edited by hand, so this reads the files themselves rather
   // than samples: a link that a reader would see as a repository path is the
   // thing this whole renderer exists to avoid.
-  for (const source of SOURCES) {
-    const markdown = readFileSync(new URL(`../${source.file}`, import.meta.url), 'utf8');
-    for (const match of markdown.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
-      const href = resolveLink(match[1] ?? '', source.file);
-      assert.ok(!href.endsWith('.md'), `${source.file}: ${match[1]} still points at a Markdown file`);
-      if (!/^https?:/.test(href)) {
-        assert.ok(
-          SOURCES.some((candidate) => candidate.route === href.split('#')[0]),
-          `${source.file}: ${match[1]} resolved to ${href}, which is not a page this service serves`,
+  //
+  // Internal links are followed rather than matched against a list. A list was
+  // the first version and it was wrong twice over: it could not express a link
+  // to a page that is rendered rather than written (/answer, /build, /pool), and
+  // it would have gone on agreeing with itself after a route was renamed. Asking
+  // the running service is the question the check is actually about.
+  const instance = await harness();
+  try {
+    for (const source of SOURCES) {
+      const markdown = readFileSync(new URL(`../${source.file}`, import.meta.url), 'utf8');
+      for (const match of markdown.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+        const href = resolveLink(match[1] ?? '', source.file);
+        assert.ok(!href.endsWith('.md'), `${source.file}: ${match[1]} still points at a Markdown file`);
+        if (/^https?:/.test(href) || href.startsWith('#')) continue;
+
+        const response = await instance.call(href.split('#')[0]!);
+        assert.equal(
+          response.status,
+          200,
+          `${source.file}: ${match[1]} resolved to ${href}, which answers ${response.status}`,
         );
       }
     }
+  } finally {
+    await instance.close();
   }
 });
 

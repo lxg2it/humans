@@ -16,7 +16,16 @@ import { generateKey } from './config.ts';
 
 export type RequestStatus = 'queued' | 'claimed' | 'answered' | 'failed' | 'expired';
 
-export const SCHEMA_VERSION = 1;
+/**
+ * Bumped to 2 on 2026-10-15, when `credentials` gained `payout_address`.
+ *
+ * The number exists so that an older build refuses a newer database rather than
+ * reading it wrongly, and that is exactly the risk here: a build that does not
+ * know about payout addresses would mint keys, settle against them, and never
+ * notice the column it was not selecting. The guard is cheap; the alternative is
+ * a quiet half-write.
+ */
+export const SCHEMA_VERSION = 2;
 
 export interface RequestRow {
   id: string;
@@ -92,6 +101,7 @@ export interface CredentialRow {
   created_at: number;
   last_used_at: number | null;
   active: number;
+  payout_address: string | null;
 }
 
 export interface LedgerRow {
@@ -188,7 +198,11 @@ CREATE TABLE IF NOT EXISTS credentials (
   key_hash      TEXT NOT NULL UNIQUE,
   created_at    INTEGER NOT NULL,
   last_used_at  INTEGER,
-  active        INTEGER NOT NULL DEFAULT 1
+  active        INTEGER NOT NULL DEFAULT 1,
+  -- Where a responder wants to be paid. Optional: a key is a seat, and reading
+  -- the queue should not require handing over a financial address. Nullable for
+  -- callers always, because nothing is ever paid to a caller.
+  payout_address TEXT
 );
 CREATE INDEX IF NOT EXISTS credentials_kind ON credentials (kind, active);
 
@@ -225,6 +239,7 @@ export class Store {
     // process arrives mid-write fails outright instead of waiting its turn.
     this.db.exec('PRAGMA busy_timeout = 5000');
     this.db.exec(SCHEMA);
+    this.addMissingColumns();
     this.checkSchemaVersion();
   }
 
@@ -233,6 +248,32 @@ export class Store {
   }
 
   // ---- requests -----------------------------------------------------------
+
+  /**
+   * The whole migration mechanism, such as it is.
+   *
+   * `CREATE TABLE IF NOT EXISTS` does nothing at all to a table that already
+   * exists, so a column added to SCHEMA never reaches a database that has been
+   * running — and this service has one, with real keys and a real ledger in it.
+   * So each added column is listed here as well, checked against `PRAGMA
+   * table_info` and added only if it is genuinely absent. That makes this
+   * idempotent, and it makes the list below the history of the schema rather
+   * than a guess about which version a database is at.
+   *
+   * It is deliberately not a framework. There is one deployment, one SQLite
+   * file, and the cost of getting a migration framework wrong is paid by the
+   * person holding the only copy of the data.
+   */
+  private addMissingColumns(): void {
+    const additions: ReadonlyArray<readonly [string, string, string]> = [
+      ['credentials', 'payout_address', 'TEXT'],
+    ];
+    for (const [table, column, definition] of additions) {
+      const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+      if (columns.some((entry) => entry.name === column)) continue;
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  }
 
   /**
    * A version marker, so a database written by a later build is refused rather
@@ -494,6 +535,63 @@ export class Store {
       : this.db.prepare('SELECT * FROM credentials ORDER BY created_at DESC').all()) as unknown as CredentialRow[];
   }
 
+  /**
+   * Sets where a responder wants to be paid, on the credential itself.
+   *
+   * On the credential rather than beside the ledger because the seat is what was
+   * purchased by reading the queue, and because an address is a thing a person
+   * changes: a rotated wallet should not require a new key.
+   */
+  setPayoutAddress(id: string, address: string | null): boolean {
+    const result = this.db.prepare('UPDATE credentials SET payout_address = ? WHERE id = ?').run(address, id);
+    return Number(result.changes) === 1;
+  }
+
+  /**
+   * Whether a name is already in use by an active responder.
+   *
+   * This matters more than it looks. Everything on the money side is keyed by
+   * the responder's NAME — earnings(name), the ledger's `responder` column, the
+   * settle command — so two people answering under one name would have their
+   * earnings added together and a single settlement paid into one of their
+   * addresses. That was survivable while keys were minted by hand by someone who
+   * would notice; it is not survivable now that the form is open, so the form
+   * refuses a name that is taken.
+   */
+  responderNameTaken(name: string): boolean {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n FROM credentials WHERE kind = 'responder' AND name = ? AND active = 1")
+      .get(name) as { n: number };
+    return Number(row.n) > 0;
+  }
+
+  /** The most recent active responder of that name, for anything that has a name and needs the seat. */
+  responderByName(name: string): CredentialRow | undefined {
+    return this.db
+      .prepare(
+        "SELECT * FROM credentials WHERE kind = 'responder' AND name = ? AND active = 1 ORDER BY created_at DESC",
+      )
+      .get(name) as CredentialRow | undefined;
+  }
+
+  /**
+   * Where to pay a responder, if they have said.
+   *
+   * Resolved through the credential rather than stored on the ledger, so that a
+   * corrected address is used by the next settlement instead of the previous
+   * one being repeated forever.
+   */
+  payoutAddressFor(name: string): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT payout_address FROM credentials
+          WHERE kind = 'responder' AND name = ? AND active = 1 AND payout_address IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(name) as { payout_address: string | null } | undefined;
+    return row?.payout_address ?? null;
+  }
+
   revokeCredential(id: string): boolean {
     const result = this.db.prepare('UPDATE credentials SET active = 0 WHERE id = ?').run(id);
     return Number(result.changes) === 1;
@@ -592,6 +690,8 @@ export class Store {
     owedSats: number;
     ratings: number;
     averageRating: number | null;
+    /** Where they have asked to be paid, so the operator does not have to ask. */
+    payoutAddress: string | null;
   }> {
     const rows = this.db
       .prepare(
@@ -608,6 +708,20 @@ export class Store {
       .prepare('SELECT responder, COUNT(*) AS n, AVG(rating) AS avg FROM ratings GROUP BY responder')
       .all() as Array<{ responder: string; n: number; avg: number | null }>;
     const byResponder = new Map(ratings.map((r) => [r.responder, r]));
+    // Where each person has asked to be paid. The newest active key of that name
+    // wins, matching what payoutAddressFor() resolves for a settlement, so the
+    // operator view and the payment path cannot disagree about the destination.
+    const addresses = new Map(
+      (
+        this.db
+          .prepare(
+            `SELECT name, payout_address FROM credentials
+              WHERE kind = 'responder' AND active = 1 AND payout_address IS NOT NULL
+              ORDER BY created_at ASC`,
+          )
+          .all() as Array<{ name: string; payout_address: string }>
+      ).map((row) => [row.name, row.payout_address]),
+    );
     return rows.map((row) => {
       const rated = byResponder.get(row.responder);
       return {
@@ -618,6 +732,7 @@ export class Store {
         owedSats: Number(row.earned) - Number(row.paid),
         ratings: rated ? Number(rated.n) : 0,
         averageRating: rated?.avg === null || rated === undefined ? null : Number(rated.avg),
+        payoutAddress: addresses.get(row.responder) ?? null,
       };
     });
   }

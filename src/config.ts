@@ -72,8 +72,24 @@ export const config = {
    * What the operator has actually set aside to pay with. Kept separate from
    * the guarantee so that an unfunded promise is visible as one: the console
    * shows the two numbers side by side and says when the fund is short.
+   *
+   * When `poolAddress` is set this becomes the *declared* figure only — the
+   * pages read the real balance off the chain and say which of the two they are
+   * showing. See src/pool.ts. Two numbers that can disagree is the point: a
+   * claim and a reading are different things, and the interface refuses to
+   * present one as the other.
    */
   poolSats: envInt('HUMANS_POOL_SATS', 0),
+
+  /**
+   * The address donations go to, if the operator has one. Absent is a valid
+   * state and the pages render the declared figure instead of pretending to
+   * have a wallet.
+   */
+  poolAddress: env('HUMANS_POOL_ADDRESS', '').trim(),
+
+  /** Where to read an address's balance from. Unauthenticated and overridable. */
+  chainApi: env('HUMANS_CHAIN_API', 'https://mempool.space/api'),
   operator: env('HUMANS_OPERATOR', 'the operator'),
   publicName: env('HUMANS_PUBLIC_NAME', 'humans'),
   publicUrl: env('HUMANS_PUBLIC_URL', ''),

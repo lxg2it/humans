@@ -136,7 +136,29 @@
       row.append(el('td', null, responder.earnedSats));
       row.append(el('td', null, responder.paidSats));
       row.append(el('td', responder.owedSats > 0 ? 'warn' : '', responder.owedSats));
+      row.append(
+        el(
+          'td',
+          responder.payoutAddress ? 'muted mono' : 'warn',
+          responder.payoutAddress || 'no address given',
+        ),
+      );
       row.append(el('td', 'muted', responder.averageRating === null ? 'unrated' : `${responder.averageRating.toFixed(1)}/5 (${responder.ratings})`));
+
+      // Paying someone is the one thing on this page that moves money, and the
+      // three fields it needs are already in this row. Asking for them again by
+      // hand is how a payment goes to the address of whoever paid last.
+      const pay = el('button', 'link', 'settle');
+      pay.type = 'button';
+      pay.addEventListener('click', () => {
+        $('settle-responder').value = responder.responder;
+        $('settle-sats').value = responder.owedSats > 0 ? responder.owedSats : '';
+        $('settle-address').value = responder.payoutAddress || '';
+        $('settle-txid').value = '';
+        $('settle-form').scrollIntoView({ block: 'nearest' });
+        ($('settle-txid').value === '' ? $('settle-txid') : $('settle-sats')).focus();
+      });
+      row.append(el('td', null, pay));
       owing.append(row);
     }
 

@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { Store } from '../db.ts';
-import { answerPage, buildPage, landingPage } from '../site.ts';
+import { createPoolReader } from '../pool.ts';
+import type { PoolReader } from '../pool.ts';
+import { answerPage, buildPage, landingPage, poolPage } from '../site.ts';
 import { createStatsReader } from '../stats.ts';
 
 /**
@@ -12,17 +14,31 @@ import { createStatsReader } from '../stats.ts';
  * reading itself is cached inside the stats reader: the page is public and
  * unauthenticated, which makes it the cheapest thing on the internet to hammer,
  * and it should not turn every visit into four queries.
+ *
+ * The pool reading works the same way and for the same reason, with one
+ * addition: a page render never waits on the chain. `read()` answers from
+ * whatever it already knows and refreshes in the background, so a slow or dead
+ * indexer costs the page a stale timestamp rather than a hung request.
  */
-export function siteRouter(store: Store): Router {
+export function siteRouter(store: Store, pool: PoolReader = createPoolReader()): Router {
   const router = Router();
   const stats = createStatsReader(store);
 
+  /** What the service has promised and not yet paid, across everybody. */
+  function owedSats(): number {
+    return store.responderSummary().reduce((total, row) => total + row.owedSats, 0);
+  }
+
   router.get('/', (_req: Request, res: Response) => {
-    res.type('html').send(landingPage(stats.read()));
+    res.type('html').send(landingPage(stats.read(), pool.read()));
   });
 
   router.get('/answer', (_req: Request, res: Response) => {
-    res.type('html').send(answerPage());
+    res.type('html').send(answerPage(pool.read()));
+  });
+
+  router.get('/pool', (_req: Request, res: Response) => {
+    res.type('html').send(poolPage(pool.read(), owedSats()));
   });
 
   router.get('/build', (_req: Request, res: Response) => {

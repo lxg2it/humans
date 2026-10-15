@@ -15,6 +15,9 @@ import { planForm, validateAgainst } from '../schema-form.ts';
 import { buildReply, type SubmitBody } from '../reply.ts';
 import { conflict, notFound, objectBody, pathParam, requireCaller, requireResponder } from '../http.ts';
 import { config } from '../config.ts';
+import { validateAddress, normaliseAddress } from '../btc.ts';
+import { createPoolReader } from '../pool.ts';
+import type { PoolReader } from '../pool.ts';
 
 /**
  * The responder-facing surface: what the console calls.
@@ -76,7 +79,11 @@ function detail(
   };
 }
 
-export function responderRouter(store: Store, queue: Queue): Router {
+export function responderRouter(
+  store: Store,
+  queue: Queue,
+  pool: PoolReader = createPoolReader(),
+): Router {
   const router = Router();
 
   /*
@@ -94,12 +101,21 @@ export function responderRouter(store: Store, queue: Queue): Router {
 
   router.get('/api/me', asResponder, (req: Request, res: Response) => {
     const responder = req.responder!;
+    const reading = pool.read();
     res.json({
       name: responder.name,
       key_id: responder.id,
       earnings: store.earnings(responder.name),
+      payout_address: responder.payout_address,
       guarantee_sats: config.guaranteeSats,
-      pool_sats: config.poolSats,
+      // Null is not zero, and the console branches on it as its own case. A
+      // measured pool that cannot be read must not arrive here looking like an
+      // empty one, or the console tells a person deciding whether to work that
+      // there is nothing in the fund when the truth is that nobody knows.
+      pool_sats: reading.sats,
+      pool_declared: reading.declared,
+      pool_read_at: reading.readAt,
+      pool_error: reading.error,
       call_timeout_ms: config.callTimeoutMs,
       claim_lease_ms: config.claimLeaseMs,
       chars_per_token: config.charsPerToken,
@@ -107,6 +123,44 @@ export function responderRouter(store: Store, queue: Queue): Router {
       // copy of the list that can drift from the one the server enforces.
       stop_reasons: STOP_REASONS,
     });
+  });
+
+  /**
+   * Where this responder wants to be paid, changeable at any time.
+   *
+   * Self-service on purpose. An address is the kind of thing that goes stale —
+   * wallets get rotated, an address gets pasted wrong, someone moves to a new
+   * wallet and stops using the old one — and the alternative to this route is a
+   * person emailing an operator to have their own record corrected. It can only
+   * ever touch the key that authenticated the request.
+   *
+   * Clearing it is allowed and is not an error: not wanting to be paid is a
+   * position this service has no business arguing with.
+   */
+  router.post('/api/me/payout-address', asResponder, (req: Request, res: Response) => {
+    const responder = req.responder!;
+    const raw = typeof req.body?.address === 'string' ? req.body.address.trim() : '';
+    if (raw === '') {
+      store.setPayoutAddress(responder.id, null);
+      res.json({ payout_address: null });
+      return;
+    }
+    const result = validateAddress(raw);
+    if (!result.valid) {
+      throw new RequestError(400, 'invalid_request_error', `that is not a Bitcoin address: ${result.reason}`);
+    }
+    if (result.info.network !== 'mainnet') {
+      throw new RequestError(
+        400,
+        'invalid_request_error',
+        'that is a testnet address. The satoshis here are real, so the address has to be a real one.',
+      );
+    }
+    const address = normaliseAddress(result.info.address);
+    store.setPayoutAddress(responder.id, address);
+    // Read back rather than echoing what was sent: the caller should be able to
+    // see what is stored, not what they typed.
+    res.json({ payout_address: store.payoutAddressFor(responder.name) ?? address });
   });
 
   router.get('/api/queue', asResponder, (req: Request, res: Response) => {
