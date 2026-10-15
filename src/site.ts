@@ -57,6 +57,29 @@ function thankYou(): string {
 }
 
 /**
+ * Where the money comes from, said wherever the number is promised.
+ *
+ * A guarantee written without this sentence is a promise with no funding behind
+ * it stated, which is the one thing the money document is strictest about. The
+ * fund is the only source of payment (Scott's ruling, 2026-10-16: *pay from that
+ * address*, and the site says you are paid if there are funds in the pool). So
+ * the condition travels with the number rather than sitting on another page.
+ *
+ * Deliberately not written as "if and only if": the fund being non-empty does
+ * not by itself move any money — a person does, by hand. What is true in both
+ * directions is narrower and is what this says: payment comes from the fund and
+ * from nowhere else, so an empty fund means nothing is paid and the credit
+ * waits.
+ */
+function paidFromTheFund(): string {
+  return (
+    `It is paid out of <a href="/pool">the fund</a>, which is the only place payment comes from: a pot the ` +
+    `operator puts satoshis into and anybody else may add to. <strong>When the fund is empty nothing is paid and ` +
+    `the credit waits</strong>, so what this is worth is bounded by what is in there.`
+  );
+}
+
+/**
  * The one place the state of the fund is put into words, so the front page, the
  * answering page and the pool page cannot disagree about it.
  *
@@ -75,10 +98,11 @@ function poolNote(pool: PoolReading): string {
   if (pool.declared) {
     if (pool.sats !== null && pool.sats <= 0) {
       return warn(
-        `<strong>The pool is empty.</strong> ${config.poolSats} satoshis have been set aside, so the guarantee ` +
-          `above is recorded and unfunded. The console says the same thing, in the same words, before anybody ` +
-          `picks up a call. This figure is the operator&rsquo;s word rather than a reading — no address is ` +
-          `configured on this instance, so there is nothing here anyone can check.`,
+        `<strong>The pool is empty.</strong> ${config.poolSats} satoshis have been set aside and none of it is ` +
+          `there, so <strong>nothing is paid</strong>. The guarantee above is recorded and unfunded, and the ` +
+          `console says the same thing before anybody picks up a call. This figure is the ` +
+          `operator&rsquo;s word rather than a reading: no address is configured on this instance, so there is ` +
+          `nothing here anyone can check.`,
       );
     }
     return '';
@@ -94,8 +118,9 @@ function poolNote(pool: PoolReading): string {
 
   if (pool.sats <= 0) {
     return warn(
-      `<strong>The pool is empty.</strong> The address holds nothing as of the last reading, so the guarantee is ` +
-        `recorded and unfunded. The console says the same thing, before anybody picks up a call.`,
+      `<strong>The pool is empty.</strong> The address holds nothing as of the last reading, so ` +
+        `<strong>nothing is paid</strong>: the guarantee is recorded and unfunded, and it is paid if the fund is ` +
+        `topped up. The console says the same thing, before anybody picks up a call.`,
     );
   }
 
@@ -118,6 +143,36 @@ function poolBalanceSentence(pool: PoolReading): string {
       `(${pool.error}), so this figure is the last one that could be.`;
   }
   return `${pool.sats.toLocaleString()} satoshis, ${age}.`;
+}
+
+/**
+ * Whether the fund actually covers what has been promised.
+ *
+ * This is the line a donor and a responder both came for, and it is derived from
+ * two readings rather than declared. The case it exists to get right is the
+ * partially funded one, which is neither of the two easy stories: the fund is
+ * not empty, so nobody thinks the promise is dead, and it is not enough, so
+ * every promise outstanding is worth less than it says.
+ */
+function coverage(held: number | null, owed: number): string {
+  if (held === null) {
+    return 'cannot be worked out, because the balance above has not been read.';
+  }
+  if (owed <= 0) {
+    return `nothing is owed at the moment, so there is nothing to cover. Held: ${held.toLocaleString()} satoshis.`;
+  }
+  if (held >= owed) {
+    const spare = held - owed;
+    return (
+      `yes. ${owed.toLocaleString()} satoshis are owed and ${held.toLocaleString()} are held` +
+      (spare === 0 ? ', exactly.' : `, leaving ${spare.toLocaleString()} to spare.`)
+    );
+  }
+  return (
+    `<strong>no.</strong> ${owed.toLocaleString()} satoshis are owed and ${held.toLocaleString()} are held, so ` +
+    `${(owed - held).toLocaleString()} of what has been promised is recorded and unpaid — payable if and when ` +
+    `the fund is topped up.`
+  );
 }
 
 // ---- the front door --------------------------------------------------------
@@ -151,7 +206,7 @@ export function landingPage(stats: PublicStats, pool: PoolReading): string {
       'Fine-tuning',
       'Not offered, not planned, and not something you should want. You may not train on the replies.',
     ],
-    ['Cost', `<strong>Free to you.</strong> ${thankYou()}`],
+    ['Cost', `<strong>Free to you.</strong> ${thankYou()} ${paidFromTheFund()}`],
   ];
 
   const rows = spec
@@ -326,6 +381,7 @@ ${rows}
       band(
         `          <h2 class="sec">The money, plainly</h2>
           <p class="body">${thankYou()}</p>
+          <p class="body">${paidFromTheFund()}</p>
           <p class="body">The unit is <strong>one answer</strong>, never one hour. There is no hourly figure
           anywhere in this project and there will not be one: pricing a reply is a statement that an answer is a
           discrete thing, and pricing an hour is a statement that a person&rsquo;s time can be bought, which is a
@@ -430,6 +486,7 @@ export function poolPage(pool: PoolReading, owedSats: number): string {
             }</li>
             <li><strong>Owed now:</strong> ${owedSats.toLocaleString()} satoshis, across everybody who has answered
             and not been paid yet</li>
+            <li><strong>Covered:</strong> ${coverage(pool.sats, owedSats)}</li>
           </ul>
           <p class="muted small">The address shown is a plain address rather than a new one per donor, so two
           people sending to it are two payments into one account and nothing distinguishes them but the time and
@@ -447,9 +504,13 @@ export function poolPage(pool: PoolReading, owedSats: number): string {
       band(
         `          <p class="eyebrow">the fund</p>
           <h1 class="headline">Where the sats come from.</h1>
-          <p class="lede">Nothing is charged to callers, so there is no revenue and no wage. Every answer still
-          carries a guarantee of ${config.guaranteeSats} satoshis to whoever wrote it, and that comes out of this:
-          the operator&rsquo;s own money, and anything anyone chooses to add to it.</p>`,
+          <p class="lede">Nothing is charged to callers, so there is no revenue and no wage. Every answer carries
+          a guarantee of ${config.guaranteeSats} satoshis to whoever wrote it, and this is where that is paid from:
+          the operator&rsquo;s own money, and anything anyone chooses to add to it.</p>
+          <p class="lede">Because payment leaves this account rather than being made from somewhere else, the
+          arithmetic below is the whole of it. <strong>The guarantee is paid out of this account, and while there is
+          something in it. When it is empty, nothing is paid</strong> and the credits that have been written wait
+          until somebody tops it up.</p>`,
       ),
       band(
         `          <h2 class="sec">The account</h2>
@@ -481,8 +542,10 @@ ${arithmetic}`,
           into a configuration file, and the address is the one the instance will be paid into. Anyone can check
           both, which is the point: a figure that only the operator can see is a claim, and this whole service is
           an argument about the difference.</p>
-          <p class="body">It is also a plain reading of one address. It says nothing about money held anywhere
-          else, and the operator may add to the pool from a wallet this page never sees.</p>
+          <p class="body">It is a reading of one address, and it is the address payment is made from rather than
+          merely the one donations arrive at. That is deliberate: it means a donor can check that the money left, in
+          the same place they can check that it arrived, instead of taking a payout log on trust. The operator can
+          top the fund up from anywhere, and every satoshi that goes out of it is visible on the chain.</p>
           <p class="closing">That is the account. <a href="/money">The money</a> is the longer version, and
           <a href="/disclaimer">the disclaimer</a> is the one that counts.</p>`,
       ),

@@ -4,7 +4,8 @@ import { config } from '../src/config.ts';
 import { SOURCES } from '../src/docs.ts';
 import { NAV } from '../src/layout.ts';
 import { createPoolReader } from '../src/pool.ts';
-import { landingPage } from '../src/site.ts';
+import { answerPage, landingPage, poolPage } from '../src/site.ts';
+import type { PoolReading } from '../src/pool.ts';
 import { publicStats } from '../src/stats.ts';
 import { harness, messageRequest } from './helpers.ts';
 
@@ -160,4 +161,93 @@ test('the chart counts real traffic, and says so plainly when there is none', as
   } finally {
     await h.close();
   }
+});
+
+/**
+ * The guarantee is a conditional promise, and the condition travels with it.
+ *
+ * Scott's ruling, 2026-10-16: the money is paid from the pool address and the
+ * site says so — you are paid if there are funds in the pool. The failure this
+ * guards against is the number appearing somewhere without the condition, which
+ * is what an unconditional promise looks like even when nobody meant to make
+ * one. A page is free to phrase it however it reads best; what it is not free to
+ * do is state the number and stop.
+ */
+const POOL_ADDRESS = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+
+function reading(over: Partial<PoolReading> = {}): PoolReading {
+  return {
+    declared: false,
+    address: POOL_ADDRESS,
+    sats: 250_000,
+    receivedSats: 250_000,
+    spentSats: 0,
+    txCount: 3,
+    readAt: Date.now() - 60_000,
+    error: null,
+    ...over,
+  };
+}
+
+test('the number is never promised without the condition on it', async () => {
+  const h = await harness();
+  try {
+    const empty = reading({ sats: 0, receivedSats: 0, txCount: 0 });
+    const funded = reading();
+    // A real store rather than a stub: the numbers on that page are read from
+    // it, and a stub here would be testing a page nobody serves.
+    const stats = publicStats(h.store);
+
+    // `literal` distinguishes the rendered pages, which print the number the
+    // service is running with, from the document, which names the setting on
+    // purpose and is not allowed to restate a figure that could go stale.
+    const pages: ReadonlyArray<readonly [string, string, boolean]> = [
+      ['the front page, funded', landingPage(stats, funded), true],
+      ['the front page, empty', landingPage(stats, empty), true],
+      ['the answering page, funded', answerPage(funded), true],
+      ['the answering page, empty', answerPage(empty), true],
+      ['the fund page, funded', poolPage(funded, 0), true],
+      ['the fund page, empty', poolPage(empty, 0), true],
+      ['the money document', (await h.call('/money')).body as string, false],
+    ];
+
+    for (const [name, html, literal] of pages) {
+      assert.match(
+        html,
+        literal ? new RegExp(`${config.guaranteeSats} satoshis`) : /HUMANS_GUARANTEE_SATS/,
+        `${name} does not state the guarantee at all, so this proves nothing about it`,
+      );
+      assert.match(
+        html,
+        /nothing is paid/,
+        `${name} states the guarantee without saying it is only paid while the fund holds something`,
+      );
+      assert.match(html, /fund|pool/, `${name} does not say where the money comes from`);
+    }
+  } finally {
+    await h.close();
+  }
+});
+
+test('the fund page says how much of what is owed it actually covers', () => {
+  // The partially funded case is the one that matters: neither of the two easy
+  // stories is true, the promise is not dead and it is not fully backed either.
+  const partly = poolPage(reading({ sats: 1_000 }), 2_500);
+  assert.match(partly, /<strong>no\.<\/strong> 2,500 satoshis are owed and 1,000 are held/);
+  assert.match(partly, /1,500 of what has been promised is recorded and unpaid/);
+
+  const covered = poolPage(reading({ sats: 5_000 }), 2_500);
+  assert.match(covered, /yes\. 2,500 satoshis are owed and 5,000 are held, leaving 2,500 to spare\./);
+
+  const exact = poolPage(reading({ sats: 2_500 }), 2_500);
+  assert.match(exact, /2,500 are held, exactly\./);
+
+  const nothingOwed = poolPage(reading({ sats: 5_000 }), 0);
+  assert.match(nothingOwed, /nothing is owed at the moment, so there is nothing to cover/);
+
+  // A balance that was never read is a missing number, not a zero, and the one
+  // line that decides whether anyone is covered must not invent it.
+  const unread = poolPage(reading({ sats: null }), 2_500);
+  assert.match(unread, /cannot be worked out, because the balance above has not been read/);
+  assert.doesNotMatch(unread, /Covered:<\/strong> yes/);
 });

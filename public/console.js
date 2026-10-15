@@ -210,15 +210,20 @@
       note.className = 'warn';
     } else if (me.pool_sats <= 0) {
       note.textContent =
-        `The guarantee is ${me.guarantee_sats} sats per reply, and the pool is empty${reading}: the promise is recorded but unfunded.`;
+        `${me.guarantee_sats} sats per reply, paid from the pool — and the pool is empty${reading}. Nothing is ` +
+        `paid while it is empty: the promise is recorded and unfunded, and it is paid if the pool gets topped up.`;
       note.className = 'warn';
     } else if (me.pool_sats < owed) {
       note.textContent =
-        `Pool ${me.pool_sats.toLocaleString()} sats${reading}, already owed ${owed.toLocaleString()}. The guarantee is not fully covered.`;
+        `Paid ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats.toLocaleString()} sats` +
+        `${reading}. Already owed ${owed.toLocaleString()}, so ${(owed - me.pool_sats).toLocaleString()} of what has ` +
+        `been promised is recorded and unpaid.`;
       note.className = 'warn';
     } else {
       note.textContent =
-        `Guaranteed ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats.toLocaleString()} sats${reading}.`;
+        `Paid ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats.toLocaleString()} sats` +
+        `${reading}. The pool is the only place payment comes from: while there is something in it the guarantee ` +
+        `is paid, and when it is empty nothing is paid.`;
       note.className = '';
     }
   }

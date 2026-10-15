@@ -51,7 +51,7 @@ Data lives in `~/.humans/humans.sqlite` unless `HUMANS_DATA_DIR` says otherwise.
 
 | variable | default | what it does |
 | --- | --- | --- |
-| `HUMANS_GUARANTEE_SATS` | `250` | promised per answered reply |
+| `HUMANS_GUARANTEE_SATS` | `250` | credited per answered reply. Paid from the pool, and only while the pool holds something |
 | `HUMANS_POOL_SATS` | `0` | the declared fund, used only when no address is set |
 | `HUMANS_POOL_ADDRESS` | unset | the address donations go to. With this set, `/pool` and the console read the balance from the chain and label it a reading; without it they print the declared figure and label *that* |
 | `HUMANS_CHAIN_API` | `https://mempool.space/api` | where the balance is read from; unauthenticated |
@@ -94,7 +94,7 @@ Every value has a working default; these are the ones worth knowing.
 | `HUMANS_DATA_DIR` | `~/.humans` | SQLite location |
 | `HUMANS_CALL_TIMEOUT_MS` | `600000` | How long a caller waits before a 504 |
 | `HUMANS_CLAIM_LEASE_MS` | `180000` | How long a responder holds a request while idle |
-| `HUMANS_GUARANTEE_SATS` | `250` | Paid per answer, owed whether or not the caller is still there |
+| `HUMANS_GUARANTEE_SATS` | `250` | Credited per answer, owed whether or not the caller is still there, and paid from the pool |
 | `HUMANS_POOL_SATS` | `0` | Satoshis shown as available in the pool |
 | `HUMANS_REQUIRE_CALLER_KEY` | `true` | Whether `/v1/*` requires a key |
 | `HUMANS_RATE_LIMIT_PER_MINUTE` | `60` | Per caller |
@@ -128,9 +128,12 @@ location / {
 Set `HUMANS_TRUST_PROXY=true` when you do, or every caller is rate-limited as
 127.0.0.1. Two operational notes worth more than they cost: back up `./data` (it
 is the ledger and the queue, and it is a directory so `rsync` is the whole
-procedure), and set `HUMANS_POOL_SATS` to what you have actually put aside before
-you point anyone at it — an unfunded guarantee is still a promise, and the console
-will say which it is either way.
+procedure), and either fund the pool or set `HUMANS_GUARANTEE_SATS=0` before you
+point anyone at it. The guarantee is paid out of the pool and from nowhere else,
+so an empty pool means nothing is paid — that is a rule rather than a fault, but
+leaving a large uncovered balance standing for months is an operator telling you
+something about themselves. The console says which state it is in before anybody
+picks up a call, and `/pool` prints the uncovered amount as a number.
 
 ## The API
 

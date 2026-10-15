@@ -89,10 +89,11 @@
     const pool = $('pool-note');
     if (stats.poolSats === 0) {
       pool.textContent =
-        'The pool is empty, so every guarantee this service has written is unfunded. Set HUMANS_POOL_SATS to what you have actually set aside.';
+        'The pool is empty, so every guarantee written is unfunded and nothing is paid. Top the fund up, or set HUMANS_GUARANTEE_SATS=0 if you mean to pay nobody.';
       pool.className = 'warn small';
     } else if (stats.poolSats < stats.owedSats) {
-      pool.textContent = `Owed ${stats.owedSats} sats against a pool of ${stats.poolSats}. The guarantee is not fully covered.`;
+      pool.textContent =
+        `Owed ${stats.owedSats} sats against a pool of ${stats.poolSats}: ${stats.owedSats - stats.poolSats} sats of what has been promised is uncovered and unpaid.`;
       pool.className = 'warn small';
     } else {
       pool.textContent = `Pool covers what is owed (${stats.owedSats} of ${stats.poolSats} sats).`;

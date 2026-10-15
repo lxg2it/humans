@@ -7,9 +7,13 @@ so that nobody ever has to guess what we mean by it.
 
 One entry per answer, in satoshis:
 
-- a **guarantee** entry of `HUMANS_GUARANTEE_SATS` (250 by default) credited to
-  whoever answered, written at the moment the answer is submitted, and owed
-  whether or not the caller was still connected;
+- a **guarantee** entry of `HUMANS_GUARANTEE_SATS` satoshis credited to whoever
+  answered, written at the moment the answer is submitted, and owed whether or
+  not the caller was still connected. This document names the setting rather than
+  the number on purpose: the figure a running service is actually offering is
+  printed on [the front page](/) and [the answering page](/answer), read from the
+  configuration at that moment, so a number written here could only ever go
+  stale;
 - a **settlement** entry when the operator actually pays, which cannot be recorded
   without a Bitcoin address and a transaction id. The payment side of the ledger
   is a record of transfers that happened, not a promise of transfers to come;
@@ -20,6 +24,33 @@ separately. If the pool is empty it says so in as many words: *the guarantee is
 recorded but unfunded*. That asymmetry is deliberate. The promise and the money
 behind it are two different facts, and the interface refuses to blur them into
 "earnings".
+
+## The guarantee is paid if there is money in the pool
+
+This is the rule, and it is not a caveat to it.
+
+Payment is made out of the pool and out of nowhere else. The pool is the
+operator's own money plus whatever anyone else has chosen to add, it has an
+address, and it is the account the guarantee is paid from. So the sentence a
+responder is owed is conditional, and it is said that way everywhere the number
+appears rather than left to be discovered:
+
+> Every answer is credited a thank-you of `HUMANS_GUARANTEE_SATS` satoshis, paid
+> from the pool. While there is something in the pool it gets paid. When the pool
+> is empty nothing is paid, the credit stays on the record, and it is paid if and
+> when somebody puts something in.
+
+Both halves of that are meant. A promise recorded against an empty pool is not
+void, and it is not quietly converted into nothing: it is an unpaid credit that
+someone may yet fund, and [the fund](/pool) shows how much of what is owed is
+actually covered at any moment. The reverse is also true and is stated as
+plainly: a funded pool is not an automatic payment. Nobody is wired to anything.
+A person sends the satoshis, by hand, and the ledger records a settlement when
+they do.
+
+An operator who wants to be paid *unconditionally* has not found a loophole here
+— they have simply stopped running this project, and the note at the end of the
+commitment above applies to them.
 
 ## The unit is one answer. There is no unit of time.
 
@@ -86,6 +117,12 @@ When the operator has a wallet for it, the pool has an address, and
 itself: it prints the balance as read from the blockchain, with the time it was
 read, and it prints what is owed against it at the same moment.
 
+The address is also the one payment leaves from. That is worth more than it
+looks: it means a donor can watch the money go out in the same place they watched
+it come in, rather than taking a payout log on trust, and it keeps the arithmetic
+on that page true — what is held there really is what is available, because
+nothing is paid from anywhere else.
+
 That distinction is the whole reason the page exists. A figure typed into a
 configuration file is the operator's word; a balance read from an address is a
 reading anyone can check. The service shows which of the two it is showing, and
@@ -103,7 +140,17 @@ whatever tax consequence follows, and neither is the other's adviser.
 ## If the guarantee is unfunded
 
 Then it is unfunded, and the console says so while a person is deciding whether
-to pick up a call. An operator who lets that note go unread for a long time is
-one who has stopped meaning it. Holding the record of a promise you are not
-keeping is worse than never making it, so the intended remedy is to either fund
-the pool or set `HUMANS_GUARANTEE_SATS=0` and drop the pretence.
+to pick up a call. The condition is not an escape hatch an operator can leave
+unstated — it is on the front page, on the answering page and in the console,
+next to the number, at all times.
+
+An empty pool is a normal state rather than an incident, and the copy covers it,
+so the older remedy here has been replaced: there is no longer a pretence to drop
+because the promise was never unconditional. `HUMANS_GUARANTEE_SATS=0` remains
+the honest setting for an operator who means to pay nobody at all.
+
+What is *not* acceptable is holding a large unpaid balance against an empty pool
+for a long time while continuing to accept answers. The console escalates in
+proportion: it warns before the first call is taken, and the fund page states the
+uncovered amount as a number rather than a mood. An operator who lets that stand
+for months has stopped meaning it, and no wording on any page fixes that.
