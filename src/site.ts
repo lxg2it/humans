@@ -846,8 +846,9 @@ export function signupPage(
               <a href="/answering">answering</a> page applies the moment you take a call.</li>`
               }
               <li><strong>There is nothing to pay and nothing to earn.</strong> Calls cost the caller nothing and
-              answers are a thank-you, not a wage. ${config.guaranteeSats} satoshis is not a reason to do this and
-              <a href="/money">the money</a> says so at length.</li>
+              answers are a thank-you, not a wage, paid from <a href="/pool">the fund</a> while the fund holds
+              something: when it is empty, nothing is paid. ${config.guaranteeSats} satoshis is not a reason to do
+              this and <a href="/money">the money</a> says so at length.</li>
             </ol>
           </div>`,
   );

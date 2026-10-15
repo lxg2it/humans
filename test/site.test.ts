@@ -198,30 +198,41 @@ test('the number is never promised without the condition on it', async () => {
     // it, and a stub here would be testing a page nobody serves.
     const stats = publicStats(h.store);
 
-    // `literal` distinguishes the rendered pages, which print the number the
-    // service is running with, from the document, which names the setting on
-    // purpose and is not allowed to restate a figure that could go stale.
-    const pages: ReadonlyArray<readonly [string, string, boolean]> = [
-      ['the front page, funded', landingPage(stats, funded), true],
-      ['the front page, empty', landingPage(stats, empty), true],
-      ['the answering page, funded', answerPage(funded), true],
-      ['the answering page, empty', answerPage(empty), true],
-      ['the fund page, funded', poolPage(funded, 0), true],
-      ['the fund page, empty', poolPage(empty, 0), true],
-      ['the money document', (await h.call('/money')).body as string, false],
+    const pages: Array<[string, string]> = [
+      ['the front page, funded', landingPage(stats, funded)],
+      ['the front page, empty', landingPage(stats, empty)],
+      ['the answering page, funded', answerPage(funded)],
+      ['the answering page, empty', answerPage(empty)],
+      ['the fund page, funded', poolPage(funded, 0)],
+      ['the fund page, empty', poolPage(empty, 0)],
     ];
+
+    // And every other page the service serves, discovered rather than listed:
+    // maintaining a list is how a page gets missed, which is how a bare number
+    // survived on the front page and then on the signup page.
+    for (const route of [...SOURCES.map((source) => source.route), '/', '/answer', '/pool', '/signup', '/console']) {
+      const response = await h.call(route);
+      assert.equal(response.status, 200, `${route} does not serve, so it cannot be checked`);
+      pages.push([route, response.body as string]);
+    }
 
     const count = (haystack: string, needle: RegExp): number => haystack.match(needle)?.length ?? 0;
 
-    for (const [name, html, literal] of pages) {
-      const number = literal ? count(html, new RegExp(`${config.guaranteeSats} satoshis`, 'g')) : 0;
+    let checked = 0;
+    for (const [name, html] of pages) {
+      // Two ways of stating it, both counted. The first draft counted only the
+      // literal and only on pages flagged as literal, so on every discovered page
+      // the count was zero by construction and the condition below skipped it
+      // silently. The falsifier was a bare number appended to a page nobody had
+      // listed, and the test passed it.
+      const number = count(html, new RegExp(`${config.guaranteeSats} satoshis`, 'g'));
+      const named = count(html, /HUMANS_GUARANTEE_SATS/g);
       const rule = count(html, /nothing is paid/g);
 
-      assert.ok(
-        literal ? number > 0 : /HUMANS_GUARANTEE_SATS/.test(html),
-        `${name} does not state the guarantee at all, so this proves nothing about it`,
-      );
-      // The count, not the presence: a page that states the number twice and the
+      if (number === 0 && named === 0) continue; // this page does not state the guarantee
+      checked += 1;
+
+      // The count, not the presence: a page stating the figure twice and the
       // condition once has a bare promise on it, and "the page mentions both" is
       // exactly the assertion that let one through the first time.
       assert.ok(
@@ -229,8 +240,27 @@ test('the number is never promised without the condition on it', async () => {
         `${name} states the guarantee ${number} time(s) and the condition ${rule}, so somewhere on it the number ` +
           `stands alone`,
       );
+      // Naming the setting is not the same as stating a figure: the money
+      // document discusses the mechanism and refers to it by name three times
+      // inside one explanation. Requiring the condition at every mention there
+      // would be an assertion nobody could keep, so what is required is that a
+      // page which names it says, somewhere, when payment happens at all.
+      assert.ok(
+        named === 0 || rule >= 1,
+        `${name} names the guarantee setting without ever saying it is paid only while the fund holds something`,
+      );
       assert.match(html, /fund|pool/, `${name} does not say where the money comes from`);
     }
+
+    // A test that skips everything proves nothing, so the pages that were
+    // actually asserted on are counted and the number is required to be large
+    // enough to include the ones known to state it.
+    assert.ok(
+      checked >= 8,
+      `only ${checked} page(s) stated the guarantee, so this test is mostly skipping and would not notice a page ` +
+        `being dropped from the set`,
+    );
+    
   } finally {
     await h.close();
   }
