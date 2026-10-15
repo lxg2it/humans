@@ -620,6 +620,13 @@ export function signupPage(
 /**
  * The page a key is on, once.
  *
+ * "Once" is about the service never showing it again, not about how many times
+ * it appears on this screen: the caller's quickstart is a complete environment
+ * block with the real key in it, because a half-filled example is not the thing
+ * anyone wants. The responder side had a second rendering that was pure
+ * decoration and it is gone — two copies of a secret on one page is the kind of
+ * thing that gets copied into the wrong place.
+ *
  * There is no route back to it: the key is not in a session, not in a URL and
  * not in the database in a form anyone can read. Reloading this page is a
  * re-post the browser will ask about, and after that it is gone — which is the
@@ -684,8 +691,8 @@ ANTHROPIC_API_KEY=${escapeText(key)}</code></pre>
             </li>
             <li>
               <h3>Open the console</h3>
-              <p>Paste the key once. It is kept in that browser only, and the queue appears as calls arrive.</p>
-              <pre><code>Responder key: ${escapeText(key)}</code></pre>
+              <p>Paste the key once, from the block above. It is kept in that browser only, and the queue appears
+              as calls arrive.</p>
             </li>
           </ol>
           <div class="cta">
