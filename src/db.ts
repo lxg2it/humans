@@ -296,6 +296,17 @@ export class Store {
           'Refusing to start rather than read it wrongly.',
       );
     }
+    // An older database that has just been brought up to date by
+    // addMissingColumns() must be *recorded* as up to date, or the marker goes on
+    // saying 1 and the refusal above never fires for the build it exists to stop:
+    // an older binary would open a database with columns it does not know about
+    // and proceed happily. Measuring this is how that was found — the column was
+    // added, and the version still read 1.
+    if (found < SCHEMA_VERSION) {
+      this.db
+        .prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'")
+        .run(String(SCHEMA_VERSION));
+    }
   }
 
   insertRequest(input: {
