@@ -7,7 +7,7 @@
  * it to a terminal rather than to a log.
  */
 import { join } from 'node:path';
-import { validateAddress, validateTxid } from '../src/btc.ts';
+import { validateMainnetAddress, validateTxid } from '../src/btc.ts';
 import { config } from '../src/config.ts';
 import { Store } from '../src/db.ts';
 
@@ -87,13 +87,13 @@ switch (command) {
     const [responder, satsRaw, address, txid, ...noteParts] = args;
     const sats = Number(satsRaw);
     if (!responder || !Number.isInteger(sats) || sats <= 0 || !address || !txid) usage();
-    const destination = validateAddress(address);
+    const destination = validateMainnetAddress(address);
     if (!destination.valid) {
-      console.error(`that is not a Bitcoin address: ${destination.reason}`);
-      process.exit(2);
-    }
-    if (destination.info.network !== 'mainnet') {
-      console.error('that is a testnet address, and the satoshis here are mainnet ones');
+      console.error(
+        destination.wrongNetwork
+          ? 'that is a testnet address, and the satoshis here are mainnet ones'
+          : `that is not a Bitcoin address: ${destination.reason}`,
+      );
       process.exit(2);
     }
     const transaction = validateTxid(txid);

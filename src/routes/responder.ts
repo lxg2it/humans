@@ -15,7 +15,7 @@ import { planForm, validateAgainst } from '../schema-form.ts';
 import { buildReply, type SubmitBody } from '../reply.ts';
 import { conflict, notFound, objectBody, pathParam, requireCaller, requireResponder } from '../http.ts';
 import { config } from '../config.ts';
-import { validateAddress, normaliseAddress } from '../btc.ts';
+import { normaliseAddress, validateMainnetAddress } from '../btc.ts';
 import { createPoolReader } from '../pool.ts';
 import type { PoolReader } from '../pool.ts';
 
@@ -145,16 +145,12 @@ export function responderRouter(
       res.json({ payout_address: null });
       return;
     }
-    const result = validateAddress(raw);
+    const result = validateMainnetAddress(raw);
     if (!result.valid) {
-      throw new RequestError(400, 'invalid_request_error', `that is not a Bitcoin address: ${result.reason}`);
-    }
-    if (result.info.network !== 'mainnet') {
-      throw new RequestError(
-        400,
-        'invalid_request_error',
-        'that is a testnet address. The satoshis here are real, so the address has to be a real one.',
-      );
+      const message = result.wrongNetwork
+        ? 'that is a testnet address. The satoshis here are real, so the address has to be a real one.'
+        : `that is not a Bitcoin address: ${result.reason}`;
+      throw new RequestError(400, 'invalid_request_error', message);
     }
     const address = normaliseAddress(result.info.address);
     store.setPayoutAddress(responder.id, address);

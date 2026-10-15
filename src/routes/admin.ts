@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { normaliseAddress, validateAddress, validateTxid } from '../btc.ts';
+import { normaliseAddress, validateMainnetAddress, validateTxid } from '../btc.ts';
 import { config } from '../config.ts';
 import type { Store } from '../db.ts';
 import type { Queue } from '../queue.ts';
@@ -107,11 +107,13 @@ export function adminRouter(store: Store, queue: Queue): Router {
     // rather than stored as typed. A settlement against a testnet address is the
     // worst of the available mistakes: it looks complete on every screen, and no
     // money can ever reach it.
-    const destination = validateAddress(address);
+    const destination = validateMainnetAddress(address);
     if (!destination.valid) {
-      badRequest(`address: that is not a Bitcoin address (${destination.reason})`);
-    } else if (destination.info.network !== 'mainnet') {
-      badRequest('address: that is a testnet address, and the satoshis here are mainnet ones');
+      badRequest(
+        destination.wrongNetwork
+          ? 'address: that is a testnet address, and the satoshis here are mainnet ones'
+          : `address: that is not a Bitcoin address (${destination.reason})`,
+      );
     }
     const tx = validateTxid(txid);
     if (!tx.valid) badRequest(`txid: ${tx.reason}`);

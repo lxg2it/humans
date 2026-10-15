@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatBtc, normaliseAddress, validateAddress } from '../src/btc.ts';
+import { formatBtc, normaliseAddress, validateAddress, validateMainnetAddress } from '../src/btc.ts';
 
 // The genesis coinbase address and friends: long-lived, publicly known, and
 // checksum-valid. Anything we get wrong here would reject real addresses.
@@ -90,6 +90,39 @@ test('recognises testnet rather than rejecting it', () => {
   const result = validateAddress('tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx');
   assert.equal(result.valid, true);
   if (result.valid) assert.equal(result.info.network, 'testnet');
+});
+
+/**
+ * The difference between "is this an address" and "can we be paid at this
+ * address". Both questions are real and they have different answers, so they
+ * are different functions — and the one every stored field reaches for refuses
+ * the chain we do not use, rather than reporting it politely and leaving the
+ * caller to remember a second check.
+ */
+test('a mainnet address is accepted, and its form is reported', () => {
+  const result = validateMainnetAddress('bc1quz2p50x5u2j0gsxscyspv0h2z38ve77z8tjm4l');
+  assert.equal(result.valid, true);
+  if (result.valid) {
+    assert.equal(result.info.network, 'mainnet');
+    assert.equal(result.info.kind, 'p2wpkh');
+  }
+});
+
+test('a testnet address is refused by name, not by looking at the message', () => {
+  const result = validateMainnetAddress('tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx');
+  assert.equal(result.valid, false);
+  if (!result.valid) {
+    assert.equal(result.wrongNetwork, true, 'the caller needs to tell a network apart from a typo structurally');
+    assert.match(result.reason, /testnet/);
+  }
+});
+
+test('a malformed address is refused without being called a network problem', () => {
+  for (const broken of ['bc1quz2p50x5u2j0gsxscyspv0h2z38ve77z8tjm4q', 'not an address', '', '1PuJjnF476W3zXfVYmJfGnouzFDAXakkL5']) {
+    const result = validateMainnetAddress(broken);
+    assert.equal(result.valid, false, `${JSON.stringify(broken)} should not be accepted`);
+    if (!result.valid) assert.equal(result.wrongNetwork, undefined, `${JSON.stringify(broken)} should not be a network error`);
+  }
 });
 
 test('formats satoshis without floating point', () => {

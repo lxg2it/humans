@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { Store } from '../db.ts';
-import { validateAddress, normaliseAddress } from '../btc.ts';
+import { normaliseAddress, validateMainnetAddress } from '../btc.ts';
 import { CHALLENGE_MAX_AGE_MS, checkSolution, issueChallenge } from '../signup.ts';
 import type { SignupKind } from '../signup.ts';
 import { signupPage, signupResultPage } from '../site.ts';
@@ -118,10 +118,15 @@ export function signupRouter(store: Store): Router {
     if (kind !== 'responder') return { ok: true, address: null };
     const text = typeof raw === 'string' ? raw.trim() : '';
     if (text === '') return { ok: true, address: null };
-    const result = validateAddress(text);
-    if (!result.valid) return { ok: false, reason: `that address is not one: ${result.reason}` };
-    if (result.info.network !== 'mainnet') {
-      return { ok: false, reason: 'that is a testnet address. Payments here are real, so it has to be a real address.' };
+    const result = validateMainnetAddress(text);
+    if (!result.valid) {
+      // A testnet address gets its own sentence, because "that is not a Bitcoin
+      // address" would be wrong and would send the person looking for a typo
+      // that is not there.
+      const reason = result.wrongNetwork
+        ? 'that is a testnet address. Payments here are real, so it has to be a real address.'
+        : `that address is not one: ${result.reason}`;
+      return { ok: false, reason };
     }
     return { ok: true, address: normaliseAddress(result.info.address) };
   }

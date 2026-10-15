@@ -304,6 +304,37 @@ export async function fetchAddressStats(
 }
 
 /**
+ * An address we can be paid at, which is stricter than an address being valid.
+ *
+ * `validateAddress` answers "is this a well-formed address, and for which
+ * chain"; that is the right question for a parser and the wrong one for a
+ * database. Every field that stores somewhere money can go needs the second
+ * question, and asking it as a separate step after the first means each call
+ * site has to remember to ask it. Three of them did, which is exactly why this
+ * exists: the fourth one would not have, and a testnet address stored cleanly
+ * in the ledger is the mistake that looks like success from every screen.
+ */
+export function validateMainnetAddress(input: string):
+  | { valid: true; info: AddressInfo }
+  | { valid: false; reason: string; wrongNetwork?: true } {
+  const result = validateAddress(input);
+  if (!result.valid) return result;
+  if (result.info.network !== 'mainnet') {
+    // `wrongNetwork` is a field rather than something a caller works out by
+    // reading `reason`. The first version of this had callers test the message
+    // with startsWith(), which made the wording load-bearing: reword the
+    // sentence and the branch silently takes the other path, giving somebody
+    // "that is not a Bitcoin address" about an address that is one.
+    return {
+      valid: false,
+      wrongNetwork: true,
+      reason: `it is a ${result.info.network} address, and the satoshis here are mainnet ones`,
+    };
+  }
+  return result;
+}
+
+/**
  * A transaction id, as it appears in a block explorer.
  *
  * Settlements are the record of transfers that actually happened, so a "sent"
