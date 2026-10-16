@@ -146,7 +146,7 @@ test('an age is said in words, because a stale number that looks current is a li
 
 test('the plural is only ever wrong where the formatter can be asked', () => {
   const now = 1_800_000_000_000;
-  const said = new Set();
+  const said = new Set<string>();
   // A sweep rather than points, because the question is which outputs are
   // reachable at all — four assertions cannot answer that, and two of the four
   // I first reached for were wrong.

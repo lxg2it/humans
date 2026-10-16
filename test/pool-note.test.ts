@@ -198,7 +198,11 @@ test("the age it prints is the same string the page renders, boundary for bounda
   secondsToCheck.push(0, 1, 89, 90, 91, 149, 150, 3_599, 3_600, 3_601, 5_399, 5_400, 129_599, 129_600, 130_000);
 
   const disagreed = [];
-  const said = new Set();
+  // Typed by its contents rather than left to inference: an untyped `new Set()`
+  // comes back as Set<unknown>, which makes the reachability check below a type
+  // error in a file the test runner never typechecks. `npm run typecheck` is
+  // part of the gate, and it was red on these two lines.
+  const said = new Set<string>();
   for (const seconds of secondsToCheck) {
     const readAt = NOW - seconds * 1_000;
     const mine = PoolNote.describeAge(readAt, NOW);
