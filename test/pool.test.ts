@@ -133,7 +133,39 @@ test('concurrent readers share one request', async () => {
 test('an age is said in words, because a stale number that looks current is a lie', () => {
   const now = 1_800_000_000_000;
   assert.equal(describeAge(now - 5_000, now), 'just now');
+  assert.equal(describeAge(now + 5_000, now), 'just now');
+  // 90 seconds is the first reading the minutes branch sees, and it rounds up.
+  assert.equal(describeAge(now - 90_000, now), '2 minutes ago');
   assert.equal(describeAge(now - 5 * 60_000, now), '5 minutes ago');
+  // The singular, which this copy got wrong: an hour-old reading read as
+  // "1 hours ago", and that string is printed on a public page.
+  assert.equal(describeAge(now - 3_600_000, now), '1 hour ago');
   assert.equal(describeAge(now - 3 * 3_600_000, now), '3 hours ago');
   assert.equal(describeAge(now - 50 * 3_600_000, now), '2 days ago');
+});
+
+test('the plural is only ever wrong where the formatter can be asked', () => {
+  const now = 1_800_000_000_000;
+  const said = new Set();
+  // A sweep rather than points, because the question is which outputs are
+  // reachable at all — four assertions cannot answer that, and two of the four
+  // I first reached for were wrong.
+  for (let seconds = 0; seconds <= 3 * 24 * 3_600; seconds += 7) {
+    said.add(describeAge(now - seconds * 1_000, now));
+  }
+
+  // Every unit is exercised, so a sweep that hit one branch cannot pass as
+  // coverage of the formatter.
+  for (const pattern of [/^just now$/, /^\d+ minutes ago$/, /^\d+ hours ago$/, /^\d+ days ago$/]) {
+    assert.ok([...said].some((text) => pattern.test(text)), `${pattern} was never said`);
+  }
+
+  assert.ok(said.has('1 hour ago'), 'an hour-old reading is reachable and must be singular');
+  // Unreachable by construction, not by luck: the just-now window is 90 seconds,
+  // so the minutes branch starts at 2, and days start at 2 because the hours
+  // branch runs to 36. Nothing can round to a bare 1 in either place, which is
+  // why neither branch carries a singular — and if the thresholds move, this is
+  // the test that says the singular became necessary.
+  assert.ok(!said.has('1 minutes ago'), 'a one-minute reading is impossible');
+  assert.ok(!said.has('1 day ago'), 'a one-day reading is impossible');
 });

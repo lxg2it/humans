@@ -145,9 +145,12 @@ export function createPoolReader(options: PoolReaderOptions = {}): PoolReader {
 export function describeAge(readAt: number, now: number = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - readAt) / 1000));
   if (seconds < 90) return 'just now';
+  // No singular here, deliberately: the just-now window is 90 seconds, so this
+  // branch first sees two minutes and can never round to one. The hours branch
+  // below does start at one, and carries the singular for it.
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} minutes ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 36) return `${hours} hours ago`;
+  if (hours < 36) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
   return `${Math.round(hours / 24)} days ago`;
 }

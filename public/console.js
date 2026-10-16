@@ -188,17 +188,6 @@
     });
   }
 
-  /** "4 minutes ago", for a reading whose age is part of what it means. */
-  function age(at) {
-    const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
-    if (seconds < 90) return 'just now';
-    const minutes = Math.round(seconds / 60);
-    if (minutes < 60) return `${minutes} minutes ago`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 36) return `${hours} hours ago`;
-    return `${Math.round(hours / 24)} days ago`;
-  }
-
   /**
    * The state of the fund, said before anybody picks up a call.
    *
@@ -216,7 +205,7 @@
       poolSats: me.pool_sats,
       poolError: me.pool_error,
       owedSats: me.earnings.owedSats,
-      readAge: me.pool_read_at === null ? null : age(me.pool_read_at),
+      readAt: me.pool_read_at,
     });
     note.textContent = stated.text;
     note.className = stated.tone;

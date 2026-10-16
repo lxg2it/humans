@@ -29,11 +29,42 @@
   /** Thousands separators, so a five-figure sum does not have to be counted. */
   const sats = (value) => value.toLocaleString();
 
+  /**
+   * "4 minutes ago", for a reading whose age is part of what it means.
+   *
+   * The same formatter exists server-side in src/pool.ts, because a rendered page
+   * and a browser file cannot share a source module without one of them giving up
+   * its runtime. It lived here too, as a copy inside console.js, with no test on
+   * it — so the sentence below quoted an age produced by code nothing checked.
+   * Now there are two copies and both are tested, and the test pins them to each
+   * other across every boundary, which is the part that was missing.
+   */
+  function describeAge(readAt, now) {
+    const seconds = Math.max(0, Math.round((now - readAt) / 1000));
+    if (seconds < 90) return 'just now';
+    // No singular here, deliberately: the just-now window is 90 seconds, so this
+    // branch first sees two minutes and can never round to one. The hours branch
+    // below does start at one, and carries the singular for it.
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} minutes ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 36) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    return `${Math.round(hours / 24)} days ago`;
+  }
+
   function note(figures) {
     const guarantee = figures.guaranteeSats;
     const pool = figures.poolSats;
     const owed = figures.owedSats || 0;
-    const reading = figures.readAge ? ` (read ${figures.readAge})` : '';
+    // The reading's age, formatted here rather than handed in: the parenthetical
+    // is part of the sentence, and a caller that formats it is a caller that can
+    // format it differently. `undefined` is treated as no reading at all, so a
+    // console that has not fetched yet cannot imply a fresh one.
+    const readAge =
+      figures.readAt === null || figures.readAt === undefined
+        ? null
+        : describeAge(figures.readAt, figures.now === undefined ? Date.now() : figures.now);
+    const reading = readAge === null ? '' : ` (read ${readAge})`;
 
     // Unreadable, and it says so. `undefined` is treated as unreadable rather
     // than as zero for the same reason null is: a field the server did not send
@@ -80,5 +111,5 @@
     };
   }
 
-  window.HumansPoolNote = { note };
+  window.HumansPoolNote = { note, describeAge };
 })();
