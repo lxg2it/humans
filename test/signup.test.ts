@@ -140,13 +140,24 @@ test('a malformed submission is refused rather than throwing', () => {
  * a declaration the arithmetic releases, and the caller side carries none. A
  * harness that only builds the checkbox form would leave the caller branch
  * untested — and the caller branch is the one that would crash on a null box.
+ *
+ * `bits` is a parameter because the difficulty is a property of the scheme and
+ * not of the wiring. This matters more than it looks: the arithmetic is
+ * geometric, so one solve in twenty takes four times the mean and one in three
+ * thousand takes eight times it, and a wiring test that runs four solves at
+ * shipped difficulty is a coin toss against any deadline. Measured: 2 failures
+ * in 8 runs of this file when every solve was at CHALLENGE_BITS against the
+ * default 4s wait, both of them this test timing out rather than failing. The
+ * gate below is exercised at a low difficulty, where its subject is the wiring;
+ * the shipped difficulty is exercised, at both wirings, by the agreement test
+ * above, which is the test that would notice a difficulty of zero.
  */
-async function runSolver(withBox: boolean) {
+async function runSolver(withBox: boolean, bits = 12, deadlineMs = 10_000) {
   const challenge = issueChallenge();
   const solutionField = { value: '' };
   const elements: Record<string, unknown> = {
     seed: { value: challenge.seed },
-    bits: { value: String(challenge.bits) },
+    bits: { value: String(bits) },
     solution: solutionField,
   };
   const listeners: Array<() => void> = [];
@@ -169,13 +180,15 @@ async function runSolver(withBox: boolean) {
   };
 
   new Function('document', SOLVER_SCRIPT)(document);
-  await until(async () => solutionField.value !== '');
+  await until(async () => solutionField.value !== '', deadlineMs);
   return { challenge, solutionField, box, listeners, status, submit };
 }
 
-test("the browser's script produces a solution the server accepts, with and without the declaration", async () => {
+test("the browser's script produces a solution the server accepts, at the shipped difficulty, with and without the declaration", async () => {
   for (const withBox of [true, false]) {
-    const { challenge, solutionField, status } = await runSolver(withBox);
+    // 30s, not the default 4s: this is the one test that must run at the
+    // difficulty the service actually ships, and its tail is real.
+    const { challenge, solutionField, status } = await runSolver(withBox, CHALLENGE_BITS, 30_000);
     assert.match(status.textContent, /arithmetic/, `no status text when withBox=${withBox}`);
     const verdict = checkSolution({ ...challenge, solution: solutionField.value }, Number(challenge.issued));
     assert.deepEqual(verdict, { ok: true }, `the browser and the server disagree when withBox=${withBox}`);
