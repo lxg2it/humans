@@ -10,6 +10,14 @@
 (() => {
   'use strict';
 
+  // Reading a request is its own file, and it is loaded before this one. It is
+  // pure data in and pure data out, so the decisions about what a block is and
+  // what a tool permits are tested without a browser. Failing loudly here is
+  // better than rendering a request as raw JSON again: a console that shows the
+  // caller's shape instead of its meaning looks like it is working.
+  const Reading = window.HumansReading;
+  if (!Reading) throw new Error('console-reading.js did not load: the console cannot read a request without it');
+
   const KEY_STORE = 'humans.responder.key';
   const POLL_MS = 4000;
   const HEARTBEAT_MS = 25000;
@@ -24,6 +32,11 @@
   let callSeq = 0;
   let submitting = false;
   let fieldIndex = new Map();
+  // Which channel of the answer the composer is writing into. View state, not
+  // answer state: the draft itself lives on detail.answer, so switching back and
+  // forth cannot lose or duplicate what was typed.
+  let channel = 'response';
+  let declared = false;
 
   let pollTimer = null;
   let heartbeatTimer = null;
@@ -326,6 +339,36 @@
     renderQueue();
   }
 
+  /**
+   * Whether the person holding this key still has to say that they are one.
+   *
+   * Read from the server's record, never from this browser: the declaration is a
+   * fact about the key, so it survives a cleared cache, a different machine, and
+   * the operator reading the row. A console that remembered it locally would ask
+   * nobody again and would be believed.
+   */
+  function needsDeclaration() {
+    return me.declared_at === null || me.declared_at === undefined;
+  }
+
+  /**
+   * The state of the take button, written in one place because three callers
+   * write it and they have to agree.
+   *
+   * The button is the only thing that puts a claim in flight, and whether that
+   * claim carries the declaration is decided by the same fact this sets: a
+   * button that is live while the sentence is unticked produces a 400 that reads
+   * as a fault in the service rather than as a word missing here.
+   */
+  function setTakeButton() {
+    const needs = needsDeclaration();
+    const free = detail !== null && detail.status === 'queued';
+    $('claim').disabled = !free || (needs && !declared);
+    $('claim').title = needs && !declared
+      ? 'tick the declaration first — it is recorded once, against your key'
+      : '';
+  }
+
   function renderDetail() {
     $('req-summary').textContent = detail.summary || detail.id;
     const meta = $('req-meta');
@@ -355,8 +398,6 @@
     const free = detail.status === 'queued';
     $('claim-bar').hidden = false;
     $('claim-bar').className = 'bar' + (mine ? ' mine' : '');
-    $('claim').hidden = mine;
-    $('claim').disabled = !free;
     $('abandon').hidden = !mine;
     goneShown = false;
     if (mine) {
@@ -370,10 +411,24 @@
       $('claim-sub').textContent = 'It is not yours to answer.';
     }
 
-    // Transcript.
+    // The declaration sits on the take button, because a claim is the moment
+    // somebody becomes an answerer rather than the holder of a key. It is asked
+    // once in the life of the key, and the button stays disabled until the
+    // sentence is ticked.
+    $('declare-row').hidden = !(free && !mine && needsDeclaration());
+    $('declare').checked = declared;
+    $('claim').hidden = mine;
+    setTakeButton();
+
+    // Transcript. The system prompt is read, not dumped: a caller that sends
+    // blocks instead of a string is the common case here, and the old rendering
+    // showed that array as JSON — a paragraph of instructions as a screenful of
+    // punctuation.
     const systemWrap = $('system-wrap');
-    if (detail.system) {
-      $('system').textContent = typeof detail.system === 'string' ? detail.system : JSON.stringify(detail.system, null, 2);
+    const systemParts = Reading.system(detail.system);
+    $('system').textContent = '';
+    if (systemParts.length > 0) {
+      renderParts($('system'), systemParts, 'system');
       systemWrap.hidden = false;
     } else {
       systemWrap.hidden = true;
@@ -388,79 +443,97 @@
     messages.forEach((message, index) => {
       const wrapper = el('div', `msg ${message.role}`);
       wrapper.append(el('div', 'msg-role', `${message.role} · ${index}`));
-      const content = message.content;
-      if (typeof content === 'string') {
-        wrapper.append(el('div', 'transcript', content));
-      } else if (Array.isArray(content)) {
-        for (const block of content) wrapper.append(renderBlock(block));
-      } else {
-        wrapper.append(el('div', 'transcript', JSON.stringify(content)));
-      }
+      renderParts(wrapper, Reading.content(message.content), message.role);
       container.append(wrapper);
     });
   }
 
-  function renderBlock(block) {
-    if (!block || typeof block !== 'object') return el('div', 'transcript', String(block));
-    switch (block.type) {
-      case 'text':
-        return el('div', 'transcript', block.text);
-      case 'thinking':
-        return el('div', 'transcript block-thinking', `[reasoning from the previous turn] ${block.thinking}`);
-      case 'tool_use': {
+  /**
+   * Renders a reading of a message's content.
+   *
+   * Every string here was written by a stranger and is set with textContent, so
+   * none of it can become markup in this browser. The shapes come from
+   * console-reading.js and this function only decides how they look.
+   */
+  function renderParts(container, parts, role) {
+    for (const part of parts) {
+      if (part.kind === 'text') {
+        container.append(el('div', 'transcript', part.text));
+      } else if (part.kind === 'reasoning') {
+        const box = el('div', 'transcript block-thinking');
+        box.append(el('div', 'block-kind', 'reasoning, from this conversation'));
+        box.append(el('div', null, part.text));
+        container.append(box);
+      } else if (part.kind === 'tool-call') {
         const box = el('div', 'transcript block-tools');
-        box.append(el('div', null, `${block.name}(${JSON.stringify(block.input ?? {})})`));
-        box.append(el('div', 'call-id', `id ${block.id} — the result below refers to this id`));
-        return box;
-      }
-      case 'tool_result': {
-        const box = el('div', 'transcript block-tools');
-        const label = block.is_error ? 'tool error' : 'tool result';
-        box.append(el('div', 'call-id', `${label} for ${block.tool_use_id}`));
-        const content = block.content;
-        if (typeof content === 'string') box.append(el('div', null, content));
-        else if (Array.isArray(content)) {
-          for (const inner of content) {
-            if (inner?.type === 'text') box.append(el('div', null, inner.text));
-            else if (inner?.type === 'image') box.append(el('div', 'muted', `[image ${inner.source?.media_type || ''}]`));
-            else box.append(el('div', 'muted', `[${inner?.type}]`));
-          }
-        } else if (content !== undefined) {
-          box.append(el('div', null, JSON.stringify(content)));
+        box.append(el('div', 'block-kind', `${role === 'assistant' ? 'the assistant' : 'the caller'} called a tool`));
+        box.append(el('div', 'tool-name', part.name));
+        if (part.takesNothing) box.append(el('div', 'field-help muted', 'no arguments'));
+        for (const arg of part.args) {
+          const row = el('div', 'arg');
+          row.append(el('span', 'arg-name', `${arg.name}: `));
+          row.append(el('span', arg.json ? 'arg-value json' : 'arg-value', arg.empty ? '(empty)' : arg.value));
+          box.append(row);
         }
-        return box;
+        box.append(el('div', 'call-id', `id ${part.id} — the result below refers to this id`));
+        container.append(box);
+      } else if (part.kind === 'tool-result') {
+        const box = el('div', 'transcript block-tools');
+        box.append(el('div', 'block-kind', `${part.label} — for id ${part.id}`));
+        for (const inner of part.parts) {
+          box.append(el('div', inner.kind === 'note' ? 'muted' : null, inner.text));
+        }
+        if (part.parts.length === 0) box.append(el('div', 'muted', '(empty result)'));
+        container.append(box);
+      } else {
+        container.append(el('div', 'transcript muted', part.text));
       }
-      case 'image':
-        return el('div', 'transcript muted', `[image ${block.source?.media_type || ''}, not shown here]`);
-      default:
-        return el('div', 'transcript', JSON.stringify(block));
     }
   }
 
+  /**
+   * The tools a caller declared.
+   *
+   * Reading order is what a person needs: what it is called, what it is for, and
+   * what it takes. The caller's own schema stays available underneath, one click
+   * away, because the console's reading of a schema is a claim about the
+   * caller's words and anyone should be able to check it against them.
+   */
   function renderTools() {
     const container = $('tools');
     container.textContent = '';
-    const tools = detail.tools || [];
+    const tools = Reading.tools(detail.tools);
     $('tools-count').textContent = tools.length === 0 ? '(none)' : `(${tools.length})`;
     $('tools-details').open = tools.length > 0 && (detail.tool_choice.mode === 'tool' || detail.tool_choice.mode === 'any');
 
     for (const tool of tools) {
       const box = el('div', 'tool');
-      const head = el('div', 'tool-name', tool.name);
-      box.append(head);
+      box.append(el('div', 'tool-name', tool.name));
       if (tool.description) box.append(el('div', 'tool-desc', tool.description));
 
-      const details = el('details');
-      details.append(el('summary', null, 'input schema'));
-      details.append(el('pre', 'transcript', JSON.stringify(tool.input_schema, null, 2)));
-      box.append(details);
-
-      if (tool.plan && tool.plan.mode === 'raw') {
-        const plan = el('details');
-        plan.append(el('summary', null, 'why this one needs JSON'));
-        plan.append(el('div', 'muted small', tool.plan.reason || 'this schema cannot be shown as a form'));
-        box.append(plan);
+      if (tool.takesNothing) {
+        box.append(el('div', 'field-help muted', 'takes no arguments'));
       }
+      for (const field of tool.fields) {
+        const row = el('div', 'field-line');
+        const head = el('div', 'field-head');
+        head.append(el('span', field.required ? 'req' : 'opt', field.required ? `${field.label} *` : field.label));
+        head.append(el('span', 'field-type', [field.type, field.bounds].filter(Boolean).join(', ')));
+        row.append(head);
+        if (field.choices.length > 0) row.append(el('div', 'field-help', `one of: ${field.choices.join(' · ')}`));
+        if (field.description) row.append(el('div', 'field-help', field.description));
+        else if (field.example) row.append(el('div', 'field-help muted', `e.g. ${field.example}`));
+        box.append(row);
+      }
+
+      if (tool.rawReason) {
+        box.append(el('div', 'field-help muted', `shown as JSON: ${tool.rawReason}`));
+      }
+
+      const details = el('details');
+      details.append(el('summary', null, "the caller's own schema"));
+      details.append(el('pre', 'transcript', tool.schema));
+      box.append(details);
       container.append(box);
     }
   }
@@ -485,44 +558,109 @@
     }
 
     detail.answer = detail.answer || { reasoning: '', response: '', calls: [], stopReason: 'end_turn', stopSequence: '' };
-    $('reasoning').value = detail.answer.reasoning;
-    $('response').value = detail.answer.response;
     calls = detail.answer.calls;
     $('answer-errors').hidden = true;
 
-    // tool_choice decides what the responder is allowed to do.
-    const choice = detail.tool_choice.mode;
-    const note = $('tool-choice-note');
-    const addRow = $('add-call-row');
-    const addSelect = $('add-call');
-    const declared = detail.tools || [];
-
-    addSelect.textContent = '';
-    addSelect.append(new Option('Add a tool call…', ''));
-    for (const tool of declared) addSelect.append(new Option(tool.name, tool.name));
-
-    if (choice === 'none') {
-      $('tools-answer').hidden = true;
-    } else {
-      $('tools-answer').hidden = false;
-      const required = detail.tool_choice.name;
-      if (choice === 'tool') {
-        note.textContent = `the caller requires ${required}, and only that`;
-        addRow.hidden = true;
-        if (!calls.some((call) => call.name === required)) calls.push(newCall(required));
-      } else if (choice === 'any') {
-        note.textContent = parallelAllowed()
-          ? 'the caller requires at least one tool call'
-          : 'the caller requires exactly one tool call';
-        addRow.hidden = false;
-      } else {
-        note.textContent = 'optional — the caller will run whatever you choose';
-        addRow.hidden = false;
-      }
-    }
-
+    renderChannels();
+    renderToolChoice();
     renderCalls();
     renderStopReasons();
+    updateMeter();
+  }
+
+  /**
+   * The composer, one channel at a time.
+   *
+   * The reply carries two things: a response text the caller reads, and a signed
+   * reasoning block most callers ignore. Two boxes side by side implied they are
+   * the same kind of thing and hid the asymmetry — that filling in the reasoning
+   * and leaving the text empty produces an answer many callers will receive as
+   * nothing at all. So there is one place to type, a switch for which channel it
+   * goes to, and the other channel's size is always on its own tab: switching
+   * channels never loses text and never hides it either.
+   */
+  function renderChannels() {
+    const reading = Reading.channels(detail.answer);
+    if (!reading.tabs.some((tab) => tab.key === channel)) channel = 'response';
+    renderChannelTabs(reading);
+    const active = reading.tabs.find((tab) => tab.key === channel);
+    const composer = $('composer');
+    composer.value = channel === 'response' ? detail.answer.response : detail.answer.reasoning;
+    composer.placeholder = channel === 'response'
+      ? 'what the caller receives as the answer'
+      : 'optional — what you actually thought';
+  }
+
+  /** Everything about the channels except the text in the box: safe to run while typing. */
+  function renderChannelTabs(reading) {
+    const reading2 = reading || Reading.channels(detail.answer);
+    const tabs = $('channel-switch');
+    tabs.textContent = '';
+    for (const tab of reading2.tabs) {
+      const button = el('button', 'channel' + (tab.key === channel ? ' on' : ''), tab.label);
+      button.type = 'button';
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', tab.key === channel ? 'true' : 'false');
+      // The channel you are not looking at says how much is in it, so text can
+      // never be sitting somewhere you have forgotten about.
+      if (tab.chars > 0 && tab.key !== channel) button.append(el('span', 'count', ` · ${tab.chars} characters`));
+      button.addEventListener('click', () => {
+        if (tab.key === channel) return;
+        channel = tab.key;
+        renderChannels();
+        $('composer').focus();
+      });
+      tabs.append(button);
+    }
+    const active = reading2.tabs.find((tab) => tab.key === channel) || reading2.tabs[0];
+    $('channel-note').textContent = active ? active.note : '';
+    $('channel-warning').hidden = reading2.warning === '';
+    $('channel-warning').textContent = reading2.warning;
+  }
+
+  /** What the caller will accept, and one button per tool it declared. */
+  function renderToolChoice() {
+    const choice = detail.tool_choice || { mode: 'auto' };
+    $('tools-answer').hidden = choice.mode === 'none';
+    if (choice.mode === 'none') return;
+
+    // tool_choice "tool" names one tool and forbids the others: its call is put
+    // in place rather than offered as a choice that cannot be declined.
+    if (choice.mode === 'tool' && choice.name && !calls.some((call) => call.name === choice.name)) {
+      calls.push(newCall(choice.name));
+    }
+    renderAddButtons();
+  }
+
+  function renderAddButtons() {
+    const view = Reading.toolButtons(detail.tools, calls.map((call) => call.name), detail.tool_choice);
+    $('tool-choice-note').textContent = view.note;
+    const row = $('add-call-row');
+    const box = $('add-call-buttons');
+    box.textContent = '';
+    row.hidden = view.buttons.length === 0;
+    for (const tool of view.buttons) {
+      const button = el('button', 'add-tool');
+      button.type = 'button';
+      button.disabled = !tool.addable;
+      if (tool.why) button.title = tool.why;
+      button.append(el('span', 'add-name', tool.name));
+      if (tool.description) button.append(el('span', 'add-desc', tool.description));
+      else if (tool.why) button.append(el('span', 'add-desc', tool.why));
+      button.addEventListener('click', () => addCall(tool.name));
+      box.append(button);
+    }
+  }
+
+  function addCall(name) {
+    const view = Reading.toolButtons(detail.tools, calls.map((call) => call.name), detail.tool_choice);
+    if (!view.canAdd) {
+      showErrors(view.refusal || 'this caller does not accept another tool call.', []);
+      return;
+    }
+    calls.push(newCall(name));
+    renderCalls();
+    queuePartial();
     updateMeter();
   }
 
@@ -617,6 +755,11 @@
 
       container.append(box);
     });
+
+    // Whether a tool can still be added depends on how many calls are already
+    // here (a caller that forbids parallel calls allows one), so the buttons are
+    // rebuilt wherever the calls change rather than only with the request.
+    renderAddButtons();
   }
 
   function renderField(call, index, spec) {
@@ -770,9 +913,11 @@
     }
     if (detail.tool_choice.mode === 'none') toolCalls.length = 0;
 
+    // The draft, not the visible box: the composer shows one channel at a time
+    // and the answer is whatever both channels hold.
     const body = {
-      thinking: $('reasoning').value,
-      text: $('response').value,
+      thinking: detail.answer.reasoning,
+      text: detail.answer.response,
       tools: toolCalls,
     };
     if (toolCalls.length === 0) {
@@ -821,6 +966,9 @@
     $('meter-note').textContent =
       `~${estimated} of ${max} output tokens (estimated from ${chars} characters, ~${me.chars_per_token} per token)`;
     $('meter-note').className = ratio > 1 ? 'error small' : 'muted small';
+    // Character counts on the channel you are not looking at, and the warning
+    // about a reasoning-only answer, both change as the answer is written.
+    renderChannelTabs();
     updateStopVisibility();
   }
 
@@ -849,7 +997,7 @@
     partialTimer = setTimeout(() => {
       api(`/api/requests/${currentId}/partial`, {
         method: 'POST',
-        body: JSON.stringify({ thinking: $('reasoning').value, text: $('response').value }),
+        body: JSON.stringify({ thinking: detail.answer.reasoning, text: detail.answer.response }),
       })
         .then((result) => {
           // A partial can reach nobody: the caller may have closed the stream.
@@ -941,9 +1089,24 @@
   });
 
   $('signout').addEventListener('click', () => signOut());
+  $('declare').addEventListener('change', () => {
+    declared = $('declare').checked;
+    setTakeButton();
+  });
   $('claim').addEventListener('click', async () => {
     try {
-      detail = await api(`/api/requests/${currentId}/claim`, { method: 'POST', body: '{}' });
+      const declaresNow = needsDeclaration();
+      detail = await api(`/api/requests/${currentId}/claim`, {
+        method: 'POST',
+        body: JSON.stringify(declaresNow ? { declare: true } : {}),
+      });
+      if (declaresNow) {
+        // Read it back rather than assuming: the date the server recorded is the
+        // date that matters, and it is what the console shows next time.
+        me = await api('/api/me');
+        renderEarnings(me.earnings);
+        renderPoolNote();
+      }
       renderDetail();
     } catch (error) {
       showErrors(error.message, error.details);
@@ -964,25 +1127,9 @@
       showErrors(error.message, error.details);
     }
   });
-  $('add-call').addEventListener('change', (event) => {
-    const name = event.target.value;
-    event.target.value = '';
-    if (!name) return;
-    if (!parallelAllowed() && calls.length >= 1) {
-      showErrors('This caller set disable_parallel_tool_use, so an answer carries one tool call at most.', []);
-      return;
-    }
-    if (detail.tool_choice.mode === 'tool') calls.length = 0;
-    calls.push(newCall(name));
-    renderCalls();
-    queuePartial();
-    updateMeter();
-  });
-  $('reasoning').addEventListener('input', () => {
-    queuePartial();
-    updateMeter();
-  });
-  $('response').addEventListener('input', () => {
+  $('composer').addEventListener('input', () => {
+    if (!detail || !detail.answer) return;
+    detail.answer[channel] = $('composer').value;
     queuePartial();
     updateMeter();
   });

@@ -172,3 +172,58 @@ button.link { background: none; border: none; color: var(--muted); text-decorati
 #meter-fill.over { background: var(--bad); }
 .stop-row { margin-top: 14px; max-width: 320px; }
 .actions { margin-top: 18px; }
+
+/* ---- reading a request ----
+ *
+ * The console shows a person what a machine sent. These rules exist so the
+ * machine's shape does not have to be held in the reader's head: a labelled
+ * field instead of a JSON object, a sentence instead of a schema keyword, and a
+ * button per thing the caller permits instead of a select that can be wrong.
+ */
+
+.arg { margin-top: 3px; }
+.arg-name { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.arg-value { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+.arg-value.json { display: block; margin: 4px 0 0; padding-left: 12px; border-left: 2px solid var(--line); }
+
+/* What kind of block this is, said once, before its content. */
+.block-kind { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+
+.field-line { margin-top: 8px; }
+.field-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.field-head .req { color: var(--warn); }
+.field-head .opt { color: var(--muted); }
+.field-type { font-size: 11.5px; color: var(--muted); }
+.block-tools { border-left: 2px solid var(--line); padding-left: 12px; }
+
+/* ---- the answer, one channel at a time ---- */
+
+.channel-switch { display: flex; gap: 6px; margin: 4px 0 6px; }
+.channel {
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 5px 14px; font-size: 13px;
+}
+.channel.on { background: var(--panel-2); color: var(--ink); border-color: #46505f; font-weight: 600; }
+.channel .count { font-weight: 400; color: var(--muted); }
+
+/* ---- the tools a caller welcomes ---- */
+
+#add-call-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.add-tool {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  text-align: left; max-width: 100%; padding: 8px 12px;
+}
+.add-tool .add-name { font-family: var(--mono); font-size: 12.5px; }
+.add-tool .add-desc {
+  font-size: 11.5px; color: var(--muted); font-weight: 400;
+  /* The caller's words, clipped by the browser rather than by the script: the
+   * text is all there, in the DOM and in the tooltip, and only its height is
+   * limited so a row of buttons stays a row. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ---- the declaration ---- */
+
+.declare { margin-top: 10px; max-width: 620px; }
+.declare-line { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; }
+.declare-line input { margin: 3px 0 0; }

@@ -81,6 +81,23 @@
             <div>
               <strong id="claim-msg"></strong>
               <div class="muted small" id="claim-sub"></div>
+              <!--
+                Asked once, here, at the first call taken — the point at which
+                someone is actually answering rather than merely holding a key.
+                The same sentence is on the signup form; the server refuses a
+                first claim that arrives without it, so it is a record rather
+                than a decoration.
+              -->
+              <div class="declare" id="declare-row" hidden>
+                <label class="declare-line">
+                  <input type="checkbox" id="declare" />
+                  <span>I am a human, and I will answer these calls myself</span>
+                </label>
+                <div class="muted small">
+                  Recorded once, with the time, against your key. It is a declaration and not a check: nothing here
+                  can tell what is on the other end of a key, so this is your word, and the service takes it as one.
+                </div>
+              </div>
             </div>
             <div class="row">
               <button id="claim">Take this call</button>
@@ -114,17 +131,10 @@
             <h2>Your answer</h2>
             <div id="answer-errors" class="error" hidden></div>
 
-            <details id="reasoning-wrap">
-              <summary>Reasoning <span class="muted small">optional</span></summary>
-              <p class="muted small">
-                Returned to the caller as a signed reasoning block, and streamed live if they asked for a stream.
-                Most callers ignore it. Write what you actually thought, or leave it empty.
-              </p>
-              <textarea id="reasoning" rows="5" spellcheck="false"></textarea>
-            </details>
-
-            <label class="label" for="response">Response</label>
-            <textarea id="response" rows="10" spellcheck="false"></textarea>
+            <div class="channel-switch" id="channel-switch" role="tablist" aria-label="which part of the answer you are writing"></div>
+            <p class="muted small" id="channel-note"></p>
+            <textarea id="composer" rows="10" spellcheck="false" aria-labelledby="channel-switch"></textarea>
+            <p class="error small" id="channel-warning" hidden></p>
 
             <div id="tools-answer">
               <div class="panel-head">
@@ -133,9 +143,7 @@
               </div>
               <div id="calls"></div>
               <div class="row" id="add-call-row">
-                <select id="add-call">
-                  <option value="">Add a tool call…</option>
-                </select>
+                <div id="add-call-buttons"></div>
               </div>
             </div>
 
@@ -159,6 +167,14 @@
       </section>
     </main>
 
+    <!--
+      The reading of a request loads first, and console.js refuses to start
+      without it. Reading is a separate file on purpose: it is pure data in and
+      pure data out, so what a block means and what a tool permits are tested in
+      node rather than by looking at the page. A console that silently fell back
+      to printing raw JSON would look like it was working.
+    -->
+    <script src="/console-reading.js"></script>
     <script src="/console.js"></script>
   </body>
 </html>
