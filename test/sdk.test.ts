@@ -62,7 +62,7 @@ test('deltas typed before the answer are not sent twice to a real client', async
   });
 
   const row = await h.awaitQueued();
-  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey });
+  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey });
   const typed = await h.call(`/api/requests/${row.id}/partial`, {
     method: 'POST',
     key: h.responderKey,

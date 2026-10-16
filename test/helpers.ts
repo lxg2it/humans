@@ -127,7 +127,14 @@ export async function harness(
         return match ?? null;
       }),
     answer: async (id, submit) => {
-      const claimed = await call(`/api/requests/${id}/claim`, { method: 'POST', body: {}, key: responderKey });
+      // A first claim carries the declaration, exactly as a real responder's
+      // first claim does: the server refuses one without it, so a harness that
+      // skipped it would be testing a client nobody has.
+      const claimed = await call(`/api/requests/${id}/claim`, {
+        method: 'POST',
+        body: { declare: true },
+        key: responderKey,
+      });
       if (claimed.status !== 200) throw new Error(`claim failed: ${JSON.stringify(claimed.body)}`);
       return call(`/api/requests/${id}/submit`, { method: 'POST', body: submit, key: responderKey });
     },

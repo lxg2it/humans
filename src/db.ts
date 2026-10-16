@@ -18,6 +18,7 @@ export type RequestStatus = 'queued' | 'claimed' | 'answered' | 'failed' | 'expi
 
 /**
  * Bumped to 2 on 2026-10-15, when `credentials` gained `payout_address`.
+ * Bumped to 3 on 2026-10-16, when it gained `declared_at`.
  *
  * The number exists so that an older build refuses a newer database rather than
  * reading it wrongly, and that is exactly the risk here: a build that does not
@@ -25,7 +26,7 @@ export type RequestStatus = 'queued' | 'claimed' | 'answered' | 'failed' | 'expi
  * notice the column it was not selecting. The guard is cheap; the alternative is
  * a quiet half-write.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface RequestRow {
   id: string;
@@ -102,6 +103,7 @@ export interface CredentialRow {
   last_used_at: number | null;
   active: number;
   payout_address: string | null;
+  declared_at: number | null;
 }
 
 export interface LedgerRow {
@@ -202,7 +204,17 @@ CREATE TABLE IF NOT EXISTS credentials (
   -- Where a responder wants to be paid. Optional: a key is a seat, and reading
   -- the queue should not require handing over a financial address. Nullable for
   -- callers always, because nothing is ever paid to a caller.
-  payout_address TEXT
+  payout_address TEXT,
+  -- When the person holding this key said, in their own words, that they are a
+  -- human who will answer the calls themselves. Epoch millis, NULL if they have
+  -- not said it, and the console asks once — at the first call taken, which is
+  -- where answering actually happens.
+  --
+  -- It records a declaration, not a test: nothing in this service can tell what
+  -- is on the other end of a key, and a column that pretended to would be the
+  -- most misleading thing in the codebase. What it does is make the person's own
+  -- word durable and datable, so an operator can see who said it and when.
+  declared_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS credentials_kind ON credentials (kind, active);
 
@@ -267,6 +279,7 @@ export class Store {
   private addMissingColumns(): void {
     const additions: ReadonlyArray<readonly [string, string, string]> = [
       ['credentials', 'payout_address', 'TEXT'],
+      ['credentials', 'declared_at', 'INTEGER'],
     ];
     for (const [table, column, definition] of additions) {
       const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -555,6 +568,23 @@ export class Store {
    */
   setPayoutAddress(id: string, address: string | null): boolean {
     const result = this.db.prepare('UPDATE credentials SET payout_address = ? WHERE id = ?').run(address, id);
+    return Number(result.changes) === 1;
+  }
+
+  /**
+   * Records the responder's declaration, and keeps the first one.
+   *
+   * `WHERE declared_at IS NULL` is the whole point of the statement rather than
+   * an optimisation: this is the moment a person said a thing in their own
+   * words, and a second declaration must not overwrite the date of the first.
+   * The update is also the concurrency control — two claims arriving together
+   * both write, one changes a row and the other changes none, and neither can
+   * quietly move a timestamp that has already been given meaning.
+   */
+  declareResponder(id: string, at: number): boolean {
+    const result = this.db
+      .prepare('UPDATE credentials SET declared_at = ? WHERE id = ? AND declared_at IS NULL')
+      .run(at, id);
     return Number(result.changes) === 1;
   }
 

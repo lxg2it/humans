@@ -60,13 +60,13 @@ test('the queue does not hand out a prompt somebody else is answering', async (t
   const otherKey = h.store.mintCredential('responder', 'someone-else').key;
   const pending = h.send(messageRequest());
   const row = await h.awaitQueued();
-  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey });
+  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey });
 
   const read = await h.call(`/api/requests/${row.id}`, { key: otherKey });
   assert.equal(read.status, 409, 'another responder must not read a claimed request');
   assert.match(read.body.error.message, /is answering this one/);
 
-  const steal = await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: otherKey });
+  const steal = await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: otherKey });
   assert.equal(steal.status, 409);
 
   await h.call(`/api/requests/${row.id}/submit`, { method: 'POST', key: h.responderKey, body: { text: 'mine' } });
@@ -79,7 +79,7 @@ test('an abandoned request goes back to the queue and can still be answered', as
 
   const pending = h.send(messageRequest());
   const row = await h.awaitQueued();
-  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey });
+  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey });
   const abandoned = await h.call(`/api/requests/${row.id}/abandon`, { method: 'POST', body: {}, key: h.responderKey });
   assert.equal(abandoned.status, 200);
 
@@ -115,7 +115,7 @@ test('a claim that is left alone is swept back to the queue', async (t) => {
 
   const pending = h.send(messageRequest());
   const row = await h.awaitQueued();
-  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey });
+  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey });
   const held = await h.call(`/api/requests/${row.id}`, { key: h.responderKey });
   assert.equal(held.body.mine, true, 'the claim should hold at first');
 
@@ -140,8 +140,8 @@ test('two responders racing for one request: exactly one wins', async (t) => {
   const row = await h.awaitQueued();
 
   const [a, b] = await Promise.all([
-    h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey }),
-    h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: second }),
+    h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey }),
+    h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: second }),
   ]);
   const statuses = [a.status, b.status].sort();
   assert.deepEqual(statuses, [200, 409], `exactly one claim should win, got ${JSON.stringify([a.status, b.status])}`);
@@ -253,7 +253,7 @@ test('a streaming caller sees text as it is typed, not only at the end', async (
   const stream = liveStream(response);
 
   const row = await h.awaitQueued();
-  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey });
+  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey });
 
   // A partial must reach the caller while the reply is still being written.
   // That is the whole difference between streaming a person and buffering one.
@@ -325,7 +325,7 @@ test('a partial that reaches nobody says so rather than reporting success', asyn
 
   const pending = h.send(messageRequest());
   const row = await h.awaitQueued();
-  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: {}, key: h.responderKey });
+  await h.call(`/api/requests/${row.id}/claim`, { method: 'POST', body: { declare: true }, key: h.responderKey });
 
   const partial = await h.call(`/api/requests/${row.id}/partial`, {
     method: 'POST',

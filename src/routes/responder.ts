@@ -107,6 +107,10 @@ export function responderRouter(
       key_id: responder.id,
       earnings: store.earnings(responder.name),
       payout_address: responder.payout_address,
+      // Null until the person has said it. The console asks at the first call
+      // taken, and the claim route below refuses a first claim that arrives
+      // without it, so this is a fact about the key rather than a UI preference.
+      declared_at: responder.declared_at,
       guarantee_sats: config.guaranteeSats,
       // Null is not zero, and the console branches on it as its own case. A
       // measured pool that cannot be read must not arrive here looking like an
@@ -188,6 +192,23 @@ export function responderRouter(
     res.json(detail(row, declaredTools(row), responder.name, queue.callTimeoutMs));
   });
 
+  /**
+   * Takes a call, and asks once whether the person holding the key is answering
+   * it themselves.
+   *
+   * The question is here rather than at signup because this is the moment it
+   * means something: a key is a seat, and asking a person to declare what they
+   * are before they have decided to sit down is asking them to agree to
+   * something they have not yet chosen to do. It is asked once — the date is
+   * kept, and no later claim has to repeat it.
+   *
+   * What is enforced is that the question is asked, not its answer. Nothing in
+   * this service can tell a person from a program, and any claim to the
+   * contrary would be false; an agent that sends declare: true without reading
+   * the sentence gets through, exactly as it can at the signup form. The
+   * alternative — no gate at all, with the sentence living only in one client's
+   * JavaScript — would mean the declaration is not a record of anything.
+   */
   router.post('/api/requests/:id/claim', asResponder, (req: Request, res: Response) => {
     const responder = req.responder!;
     const id = pathParam(req, 'id');
@@ -199,6 +220,17 @@ export function responderRouter(
           ? `${row.claimed_by} is answering this one`
           : `this request is ${row.status} and is no longer waiting`,
       );
+    }
+    if (responder.declared_at === null) {
+      if (req.body?.declare !== true) {
+        throw new RequestError(
+          400,
+          'invalid_request_error',
+          'before taking a call, say that you are a human and will answer it yourself: send {"declare": true} with ' +
+            'this claim. It is recorded once, with the time, against your key.',
+        );
+      }
+      store.declareResponder(responder.id, Date.now());
     }
     if (!store.claim(id, responder.name)) {
       // The conditional update lost, which means somebody claimed it between the
