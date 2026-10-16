@@ -133,7 +133,15 @@ test('a malformed submission is refused rather than throwing', () => {
  * event, a real submit. That is what the run against the live page is for, and
  * it belongs in the runbook rather than in a unit test that cannot see it.
  */
-test("the browser's script produces a solution the server accepts", async () => {
+/**
+ * Runs the served script against a fake document and returns what it did.
+ *
+ * `withBox` exists because the form has two wirings: the responder side carries
+ * a declaration the arithmetic releases, and the caller side carries none. A
+ * harness that only builds the checkbox form would leave the caller branch
+ * untested — and the caller branch is the one that would crash on a null box.
+ */
+async function runSolver(withBox: boolean) {
   const challenge = issueChallenge();
   const solutionField = { value: '' };
   const elements: Record<string, unknown> = {
@@ -141,14 +149,19 @@ test("the browser's script produces a solution the server accepts", async () => 
     bits: { value: String(challenge.bits) },
     solution: solutionField,
   };
-  const box = { disabled: true, checked: false, addEventListener: () => undefined };
+  const listeners: Array<() => void> = [];
+  const box = {
+    disabled: true,
+    checked: false,
+    addEventListener: (_event: string, fn: () => void) => listeners.push(fn),
+  };
   const status = { textContent: '' };
   const submit = { disabled: true };
 
   const document = {
     getElementById: (id: string) => {
       if (id === 'signup') return { elements };
-      if (id === 'human') return box;
+      if (id === 'human') return withBox ? box : null;
       if (id === 'human-status') return status;
       if (id === 'go') return submit;
       return null;
@@ -156,13 +169,41 @@ test("the browser's script produces a solution the server accepts", async () => 
   };
 
   new Function('document', SOLVER_SCRIPT)(document);
-
   await until(async () => solutionField.value !== '');
-  assert.equal(box.disabled, false, 'the checkbox must be released once the work lands');
-  assert.match(status.textContent, /arithmetic/);
+  return { challenge, solutionField, box, listeners, status, submit };
+}
 
-  const verdict = checkSolution({ ...challenge, solution: solutionField.value }, Number(challenge.issued));
-  assert.deepEqual(verdict, { ok: true }, 'the browser and the server must agree on the same challenge');
+test("the browser's script produces a solution the server accepts, with and without the declaration", async () => {
+  for (const withBox of [true, false]) {
+    const { challenge, solutionField, status } = await runSolver(withBox);
+    assert.match(status.textContent, /arithmetic/, `no status text when withBox=${withBox}`);
+    const verdict = checkSolution({ ...challenge, solution: solutionField.value }, Number(challenge.issued));
+    assert.deepEqual(verdict, { ok: true }, `the browser and the server disagree when withBox=${withBox}`);
+  }
+});
+
+test('the declaration gates the button on one side, and only that side waits for a click', async () => {
+  // The responder side: the box is released by the arithmetic, and the submit is
+  // still refused until a person has ticked it. The old harness stubbed
+  // addEventListener as a no-op, so it could not see this gate at all — the
+  // script could have submitted on the solver's own say-so and every assertion
+  // would still have passed.
+  const declared = await runSolver(true);
+  assert.equal(declared.box.disabled, false, 'the arithmetic must release the declaration');
+  assert.equal(declared.submit.disabled, true, 'the form submits before anything was declared');
+  assert.equal(declared.listeners.length, 1, 'nothing is listening for the declaration');
+  declared.box.checked = true;
+  declared.listeners[0]!();
+  assert.equal(declared.submit.disabled, false, 'ticking the declaration must release the button');
+  declared.box.checked = false;
+  declared.listeners[0]!();
+  assert.equal(declared.submit.disabled, true, 'unticking the declaration must take the button back');
+
+  // The caller side: nobody is asked whether they are a person, so nobody waits
+  // to be asked. The arithmetic is the whole gate.
+  const undeclared = await runSolver(false);
+  assert.equal(undeclared.submit.disabled, false, 'the caller form waits for a declaration it does not make');
+  assert.equal(undeclared.listeners.length, 0, 'the caller form wired a listener to a box that is not there');
 });
 
 test('signing up mints a caller key that authenticates', async () => {
@@ -265,6 +306,44 @@ test('a submission that did no work is refused, and gets a working form back', a
     // gate, so the form comes back with a fresh challenge in it.
     assert.match(response.body, /id="signup"/);
     assert.doesNotMatch(response.body, new RegExp(challenge.seed));
+  } finally {
+    await h.close();
+  }
+});
+
+test('the humanity declaration is on the side of the service that needs one', async () => {
+  const h = await harness();
+  try {
+    const caller = (await h.call('/signup')).body as string;
+    const responder = (await h.call('/signup?as=responder')).body as string;
+
+    // The responder is the person: the declaration is theirs, and it says what
+    // they are undertaking rather than merely what they are.
+    assert.match(responder, /id="human"/, 'the answering side no longer asks the person to say so');
+    assert.match(
+      responder,
+      /I am a human, and I will answer these calls myself/,
+      'the declaration no longer names the thing being undertaken',
+    );
+
+    // The caller is a key, not an account, and usually not a person at all.
+    // Scott's correction, 2026-10-16: an API-key form is exactly where nobody
+    // cares, so a declaration here would be asking the wrong reader.
+    assert.doesNotMatch(caller, /id="human"/, 'the caller form asks for a declaration again');
+    assert.doesNotMatch(caller, /I am a human/, 'the caller form asks for a declaration again');
+
+    // And the absence is stated, rather than left for a reader to assume they
+    // passed a check. An agent reading this page should not be left wondering.
+    assert.match(
+      caller,
+      /No humanity check on this side/,
+      'the caller form removed the check without saying so',
+    );
+
+    // The requirement belongs where the answering happens too, not only on the
+    // signup form: /answer is where somebody decides to take the job.
+    const answer = (await h.call('/answer')).body as string;
+    assert.match(answer, /answer as yourself/, 'the answering page drops the one thing asked of a responder');
   } finally {
     await h.close();
   }

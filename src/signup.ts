@@ -165,6 +165,14 @@ export function checkSolution(input: Submitted, now: number = Date.now()): Solut
  * It writes the answer into a hidden field and enables the submit button. A
  * visitor with scripting off gets a disabled form and a line saying so, which is
  * a worse experience and an honest one; silently refusing them would be neither.
+ *
+ * Two wirings, because the declaration it gates exists on one side of the
+ * service only. Where the form carries a checkbox, solving the arithmetic
+ * releases it and ticking it submits — a person saying so in their own hand.
+ * Where it does not, solving the arithmetic IS the submission, because the
+ * caller side asks nothing of the kind and has no business pretending to.
+ * Assuming the checkbox exists would throw a TypeError there and leave the
+ * button dead, which is the failure this branch exists to prevent.
  */
 export const SOLVER_SCRIPT = `(function () {
   var form = document.getElementById('signup');
@@ -219,11 +227,18 @@ export const SOLVER_SCRIPT = `(function () {
   solve(0).then(function (solution) {
     form.elements.solution.value = solution;
     var seconds = ((Date.now() - started) / 1000).toFixed(1);
-    box.disabled = false;
-    status.textContent = 'Done, in ' + seconds + ' seconds of arithmetic. That is the whole check.';
+    if (box) {
+      box.disabled = false;
+      status.textContent = 'Done, in ' + seconds + ' seconds of arithmetic. Tick the box above and the key is yours.';
+    } else {
+      submit.disabled = false;
+      status.textContent = 'Done, in ' + seconds + ' seconds of arithmetic. That is the whole check.';
+    }
   });
 
-  box.addEventListener('change', function () {
-    submit.disabled = !box.checked;
-  });
+  if (box) {
+    box.addEventListener('change', function () {
+      submit.disabled = !box.checked;
+    });
+  }
 })();`;

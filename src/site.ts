@@ -370,6 +370,10 @@ export function answerPage(pool: PoolReading): string {
           there is no machine to answer it. You read it, you type an answer, and it goes back as the response.</p>
           <p class="plede">That is the whole job. It is also not a job — see the money, below, which is the part
           this project is most careful about.</p>
+          <p class="plede">One thing is asked of you and it is not a check: <strong>answer as yourself.</strong>
+          Nothing here can verify that and the console will not pretend to try. But a machine taking these calls
+          would hand the caller something they did not ask for and could not tell apart from what they did — which
+          is the one thing this service has to offer.</p>
           <div class="cta">
             <a class="btn btn-primary" href="/console">Open the console <span class="arrow">→</span></a>
             <a class="btn" href="/answering">What answering involves</a>
@@ -737,19 +741,53 @@ const RESPONDER_NOTICE =
   `to get a synthesised answer. There is one place to get somebody&rsquo;s.</p>`;
 
 /**
- * The honest description of the checkbox.
+ * The honest description of the arithmetic, on each side of the service.
  *
  * This is the sentence that stops the whole mechanism being a lie, so it is not
- * in a comment: it is on the page, above the thing it describes. A site that
+ * in a comment: it is on the page, next to the thing it describes. A site that
  * spends its front page complaining that models are passed off as people has no
  * business pretending a puzzle distinguishes them.
+ *
+ * Two versions, because the two sides are asked different questions and one of
+ * them is asked nothing at all. The caller's page says so rather than leaving
+ * the absence to be inferred: a reader who expects a humanity check should find
+ * out immediately that there is not one, rather than assume it was passed.
  */
-const CHALLENGE_NOTE =
+const RESPONDER_CHALLENGE_NOTE =
   `<li><strong>That checkbox is not a test of humanity.</strong> There is no such test. Anything a person can ` +
   `solve, a machine solves faster, so a check claiming to separate us is either guessing or lying. What this one ` +
   `does is make you run a second of arithmetic: enough to stop software that fills in every form it finds, and ` +
   `nothing at all to anyone who is actually trying. If that is you, the notice above is the real ask, and it is ` +
   `only a sentence.</li>`;
+
+const CALLER_CHALLENGE_NOTE =
+  `<li><strong>Nothing on this page asks whether you are a person.</strong> Callers are usually programs, and this ` +
+  `API is built to be called by one, so a check here would put the question to the one reader it does not apply ` +
+  `to. The arithmetic in the form is not a test of humanity either: there is no such test. What it does is make ` +
+  `you run a second of arithmetic — enough to stop software that fills in every form it finds, and nothing at all ` +
+  `to anyone who actually means it.</li>`;
+
+/**
+ * The humanity declaration, and it is on one side of the service only.
+ *
+ * Scott's correction, 2026-10-16: the caller key is exactly where nobody cares
+ * whether a person or a program is asking, because a program asking is the
+ * ordinary case and the reason the API exists. A declaration there is not merely
+ * useless, it contradicts the notice directly above it, which welcomes agents.
+ * The side that needs a person is the answering side — so the declaration is on
+ * the responder form and nowhere else, and it is a declaration rather than a
+ * check, which the page says in the same breath.
+ */
+const RESPONDER_CHECK =
+  `            <div class="human">
+              <input type="checkbox" id="human" disabled />
+              <label for="human">I am a human, and I will answer these calls myself</label>
+            </div>`;
+
+const CALLER_CHECK =
+  `<p class="muted small"><strong>No humanity check on this side.</strong> A caller is usually a program, and ` +
+  `calling this from one is what the API is for — so this form does not ask. What the arithmetic above stops is ` +
+  `software that fills in every form it finds. It is not a question about what you are.</p>`;
 
 function hidden(name: string, value: string): string {
   return `<input type="hidden" name="${escapeAttribute(name)}" value="${escapeAttribute(value)}" />`;
@@ -821,13 +859,11 @@ export function signupPage(
             you if anything is owed. You can set or change this later from the console, so a wallet you rotate
             next year is not a wallet you are stuck with.</p>`
             }
-            <div class="human">
-              <input type="checkbox" id="human" disabled />
-              <label for="human">I am a human</label>
-            </div>
+            ${caller ? '' : RESPONDER_CHECK}
             <p class="muted small" id="human-status">Doing some arithmetic&hellip;</p>
+            ${caller ? CALLER_CHECK : ''}
             <noscript>
-              <p class="note-warn"><strong>This form needs JavaScript,</strong> because the check above is arithmetic
+              <p class="note-warn"><strong>This form needs JavaScript,</strong> because the work above is arithmetic
               rather than a puzzle. Which is said plainly because the alternative is a form that refuses you without
               telling you why.</p>
             </noscript>
@@ -842,7 +878,7 @@ export function signupPage(
     `          <h2 class="sec">The small print</h2>
           <div class="fine">
             <ol>
-              ${CHALLENGE_NOTE}
+              ${caller ? CALLER_CHALLENGE_NOTE : RESPONDER_CHALLENGE_NOTE}
               <li><strong>The key is shown once.</strong> Only a hash of it is stored, which is the same reason a
               forgotten key cannot be recovered by anyone here — including whoever runs the service. If you lose it,
               get another one.</li>
