@@ -26,6 +26,27 @@ p { margin: 6px 0; }
 
 /* ---- chrome ---- */
 
+/*
+ * The `hidden` attribute has to win.
+ *
+ * The browser applies `[hidden] { display: none }` from its own stylesheet, and
+ * every author rule outranks it. So the moment this file gives an id a display
+ * value — `#gate { display: flex }`, `#main { display: flex }` — the attribute
+ * stops hiding that element, silently and with no console warning.
+ *
+ * That is not a hypothetical: it shipped. Signing out left the console shell
+ * rendered underneath the key form, so a signed-out visitor could see the queue
+ * panel and the answer area, because both are hidden by attribute rather than
+ * by a class. Everything else in this file that is toggled from the script is
+ * a class, which is why only these two were affected.
+ *
+ * !important is used here and nowhere else on purpose: this rule's one job is
+ * to beat a display value written further down this same file.
+ */
+[hidden] { display: none !important; }
+
+#bar {
+  display: flex; justify-content: space-between; align-items: center;
 #bar {
   display: flex; justify-content: space-between; align-items: center;
   padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
