@@ -202,44 +202,24 @@
   /**
    * The state of the fund, said before anybody picks up a call.
    *
-   * The order of these branches is the whole function. `pool_sats` is null when
-   * the instance reads its balance from the chain and the chain could not be
-   * reached, and null must not fall through to the empty-pool sentence: "nobody
-   * knows" told as "there is nothing" is the one lie this service cannot afford,
-   * because it is the sentence a person reads while deciding whether to work.
+   * The sentences are pool-note.js, loaded before this file and tested there
+   * against the four states a person can be in. They used to be built here, at
+   * runtime, which made the copy the responder actually reads the only copy in
+   * the service that no test could see: the page tests read the pages, and this
+   * was never on one.
    */
   function renderPoolNote() {
     if (!me) return;
     const note = $('pool-note');
-    note.textContent = '';
-    const owed = me.earnings.owedSats;
-    const reading = me.pool_read_at === null ? '' : ` (read ${age(me.pool_read_at)})`;
-
-    if (me.pool_sats === null) {
-      note.textContent =
-        `The guarantee is ${me.guarantee_sats} sats per reply. The pool balance could not be read` +
-        `${me.pool_error ? ` — ${me.pool_error}` : ''}, so whether it is funded is unknown right now. ` +
-        `That is a missing figure, not an empty one: while the pool holds something the guarantee is paid, and ` +
-        `when it is empty nothing is paid.`;
-      note.className = 'warn';
-    } else if (me.pool_sats <= 0) {
-      note.textContent =
-        `${me.guarantee_sats} sats per reply, paid from the pool — and the pool is empty${reading}. Nothing is ` +
-        `paid while it is empty: the promise is recorded and unfunded, and it is paid if the pool gets topped up.`;
-      note.className = 'warn';
-    } else if (me.pool_sats < owed) {
-      note.textContent =
-        `Paid ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats.toLocaleString()} sats` +
-        `${reading}. Already owed ${owed.toLocaleString()}, so ${(owed - me.pool_sats).toLocaleString()} of what has ` +
-        `been promised is recorded and unpaid.`;
-      note.className = 'warn';
-    } else {
-      note.textContent =
-        `Paid ${me.guarantee_sats} sats per answered reply, from a pool of ${me.pool_sats.toLocaleString()} sats` +
-        `${reading}. The pool is the only place payment comes from: while there is something in it the guarantee ` +
-        `is paid, and when it is empty nothing is paid.`;
-      note.className = '';
-    }
+    const stated = window.HumansPoolNote.note({
+      guaranteeSats: me.guarantee_sats,
+      poolSats: me.pool_sats,
+      poolError: me.pool_error,
+      owedSats: me.earnings.owedSats,
+      readAge: me.pool_read_at === null ? null : age(me.pool_read_at),
+    });
+    note.textContent = stated.text;
+    note.className = stated.tone;
   }
 
   initPayoutEditor();
