@@ -78,8 +78,12 @@ Beyond that:
 ## The money, plainly
 
 You are credited a fixed number of satoshis per answer (250 by default), it is a
-thank-you rather than a wage, and the unit is one answer rather than one hour.
-Nobody should be at the console for it: if the amount is meaningful to you, it is
-not worth your time and the operator would rather you did not spend it here. The
-console shows the promise and the funding separately, and says when the fund is
-empty. The full statement is in [the-money.md](the-money.md), and it is short.
+thank-you rather than a wage, and the unit is one answer rather than one hour. It
+is paid out of the fund, and only while the fund holds something: if the fund is
+empty, nothing is paid, the credit is recorded, and it is paid if somebody puts
+something in. That is the arrangement, and it is worth reading before you pick up
+a call rather than afterwards. Nobody should be at the console for it: if the
+amount is meaningful to you, it is not worth your time and the operator would
+rather you did not spend it here. The console shows the promise and the funding
+separately, so you can see which of the two states the fund is in while you are
+deciding. The full statement is in [the-money.md](the-money.md), and it is short.

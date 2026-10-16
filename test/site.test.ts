@@ -244,25 +244,62 @@ test('the number is never promised without the condition on it', async () => {
 
     const count = (haystack: string, needle: RegExp): number => haystack.match(needle)?.length ?? 0;
 
+    // The figure in any form it is written, not one phrasing of it. The version
+    // before this counted only the literal "250 satoshis", so the answering page
+    // — which writes the figure as "250 by default" — was skipped by the
+    // `continue` below and passed by being invisible rather than by being
+    // conditional. That is the third time this test has been blind to a page it
+    // believed it was checking, so the detector is now built from the configured
+    // figure and proved with controls before it judges anything.
+    const figureDigits = [...new Set([String(config.guaranteeSats), config.guaranteeSats.toLocaleString('en-AU')])].map(
+      (form) => form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    );
+    // A standalone number: not the tail of a longer one, and not part of a larger
+    // figure with a thousands separator ("250" inside "1,250,000" is a balance,
+    // not the promise).
+    const figureForms = new RegExp(`(?<![\\d.,])(?:${figureDigits.join('|')})(?![\\d.,])`, 'g');
+
+    const figureMentions = (html: string): number => count(html, figureForms);
+    const namedMentions = (html: string): number => count(html, /HUMANS_GUARANTEE_SATS/g);
+    const CONDITION = /nothing is paid/g;
+    // The rule itself, as a predicate, so that it can be shown to bite on a bare
+    // promise instead of only being asserted about real pages.
+    const barePromise = (html: string): boolean => figureMentions(html) > count(html, CONDITION);
+
+    // The controls, before any page is judged — because a check that cannot see
+    // what it is looking for agrees with everything.
+    assert.equal(
+      figureMentions('<p>a fixed number of satoshis per answer (250 by default)</p>'),
+      1,
+      'the detector cannot see the figure written as "250 by default", which is the form that escaped the last version',
+    );
+    assert.equal(figureMentions(`<p>${config.guaranteeSats} satoshis</p>`), 1, 'the detector cannot see the plain form');
+    assert.equal(figureMentions('<p>1,250,000 satoshis held</p>'), 0, 'the detector counts the promise inside a larger balance');
+    assert.equal(figureMentions('<p>nothing numeric here</p>'), 0, 'the detector finds a figure where there is none');
+    assert.ok(barePromise('<p>You are credited 250 satoshis.</p>'), 'a bare promise is not reported as bare');
+    assert.ok(
+      !barePromise('<p>You are credited 250 satoshis. If the fund is empty, nothing is paid.</p>'),
+      'a conditional promise is reported as bare, so the rule below would fail on good copy',
+    );
+
+    const checkedPages: string[] = [];
     let checked = 0;
     for (const [name, html] of pages) {
-      // Two ways of stating it, both counted. The first draft counted only the
-      // literal and only on pages flagged as literal, so on every discovered page
-      // the count was zero by construction and the condition below skipped it
-      // silently. The falsifier was a bare number appended to a page nobody had
-      // listed, and the test passed it.
-      const number = count(html, new RegExp(`${config.guaranteeSats} satoshis`, 'g'));
-      const named = count(html, /HUMANS_GUARANTEE_SATS/g);
-      const rule = count(html, /nothing is paid/g);
+      const number = figureMentions(html);
+      const named = namedMentions(html);
+      const rule = count(html, CONDITION);
 
       if (number === 0 && named === 0) continue; // this page does not state the guarantee
       checked += 1;
+      checkedPages.push(name);
 
       // The count, not the presence: a page stating the figure twice and the
       // condition once has a bare promise on it, and "the page mentions both" is
-      // exactly the assertion that let one through the first time.
+      // exactly the assertion that let one through the first time. This is the
+      // predicate the controls above proved can tell a bare promise from a
+      // conditional one, applied to the page rather than to a specimen.
       assert.ok(
-        rule >= number,
+        !barePromise(html),
         `${name} states the guarantee ${number} time(s) and the condition ${rule}, so somewhere on it the number ` +
           `stands alone`,
       );
@@ -286,6 +323,19 @@ test('the number is never promised without the condition on it', async () => {
       `only ${checked} page(s) stated the guarantee, so this test is mostly skipping and would not notice a page ` +
         `being dropped from the set`,
     );
+
+    // And the pages where the promise actually lives, named, so that one of them
+    // cannot quietly leave the checked set again — which is exactly how the
+    // answering page passed this test for as long as it has. The answering page
+    // is the one that matters most: it is where somebody deciding whether to pick
+    // up a call reads the figure.
+    for (const important of ['/answering', '/money', '/pool', '/']) {
+      assert.ok(
+        checkedPages.includes(important),
+        `${important} is not among the pages this test checked (${checkedPages.join(', ')}), so the promise there ` +
+          `is unverified rather than verified`,
+      );
+    }
     
   } finally {
     await h.close();
