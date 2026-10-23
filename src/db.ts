@@ -719,6 +719,24 @@ export class Store {
   }
 
   /**
+   * What the service has promised and not yet paid, across everybody.
+   *
+   * One definition with two readers — the public /pool page and the console's
+   * note beside the claim button — because they were two until 2026-10-22: the
+   * page summed every responder's ledger and printed "across everybody who has
+   * answered", while the console handed the note a SINGLE responder's balance
+   * and the note called it "what has been promised". Same word, two quantities,
+   * on a service whose whole offer is a promise about money. The word "owed"
+   * now names one thing, and it is computed here.
+   *
+   * This is deliberately not a per-request query on a hot path: /pool already
+   * does this work unauthenticated, and the console is one authenticated reader.
+   */
+  owedAcrossEverybody(): number {
+    return this.responderSummary().reduce((total, row) => total + row.owedSats, 0);
+  }
+
+  /**
    * One row per responder: how much work, how much earned, how much paid.
    * Built from the ledger rather than from a stored running total, so it cannot
    * disagree with it.

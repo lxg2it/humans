@@ -24,9 +24,14 @@ export function siteRouter(store: Store, pool: PoolReader = createPoolReader()):
   const router = Router();
   const stats = createStatsReader(store);
 
-  /** What the service has promised and not yet paid, across everybody. */
+  /**
+   * What the service has promised and not yet paid, across everybody. The sum
+   * lives on the store now, because the console note beside the claim button
+   * needs the same figure and had been given a single responder's balance while
+   * using the same word for it.
+   */
   function owedSats(): number {
-    return store.responderSummary().reduce((total, row) => total + row.owedSats, 0);
+    return store.owedAcrossEverybody();
   }
 
   router.get('/', (_req: Request, res: Response) => {

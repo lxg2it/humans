@@ -112,6 +112,13 @@ export function responderRouter(
       // without it, so this is a fact about the key rather than a UI preference.
       declared_at: responder.declared_at,
       guarantee_sats: config.guaranteeSats,
+      // Their own credit is `earnings.owedSats`; this is what the SERVICE has
+      // promised across everyone, which is the figure the pool has to cover and
+      // the one the console note speaks about. Both are sent, because a person
+      // deciding whether to work needs to know that their own credit exists and
+      // that the fund is shared — and a single number labelled "owed" cannot
+      // say both.
+      owed_across_everybody: store.owedAcrossEverybody(),
       // Null is not zero, and the console branches on it as its own case. A
       // measured pool that cannot be read must not arrive here looking like an
       // empty one, or the console tells a person deciding whether to work that

@@ -51,7 +51,7 @@ const note = (over: Record<string, unknown> = {}) =>
       guaranteeSats: GUARANTEE,
       poolSats: 0,
       poolError: null,
-      owedSats: 0,
+      owedAcrossEverybody: 0,
       readAt: null,
       now: NOW,
       ...over,
@@ -110,36 +110,54 @@ test('an empty pool is stated as an unfunded promise, not as no promise', () => 
 test('a partly funded pool puts a number on the shortfall', () => {
   // The case that matters, and the only one where the honest answer is neither
   // of the two easy ones: the promise is alive and it is not fully backed.
-  const partial = note({ poolSats: 1_000, owedSats: 2_500, ...twoMinutesAgo() });
+  const partial = note({ poolSats: 1_000, owedAcrossEverybody: 2_500, ...twoMinutesAgo() });
 
   assert.equal(
     partial.text,
-    'Paid 250 sats per answered reply, from a pool of 1,000 sats (read 2 minutes ago). Already owed 2,500, ' +
-      'so 1,500 of what has been promised is recorded and unpaid.',
+    'Paid 250 sats per answered reply, from a pool of 1,000 sats (read 2 minutes ago). 2,500 is owed across ' +
+      'everybody who has answered, so 1,500 of what has been promised is recorded and unpaid.',
   );
   assert.equal(partial.tone, 'warn', 'a shortfall is not a calm state to read');
 
   // The subtraction is the figure a person is actually owed, and both sides of
   // it carry separators so five- and six-figure sums can be read at a glance.
-  const bigger = note({ poolSats: 2_000, owedSats: 12_500 });
+  const bigger = note({ poolSats: 2_000, owedAcrossEverybody: 12_500 });
   assert.match(bigger.text, /from a pool of 2,000 sats/);
-  assert.match(bigger.text, /Already owed 12,500, so 10,500 of what has been promised is recorded and unpaid/);
+  assert.match(bigger.text, /12,500 is owed across everybody who has answered, so 10,500 of what has been promised is recorded and unpaid/);
 
   // The boundary, in both directions: one satoshi short is a shortfall, and
   // exactly covered is covered. An off-by-one here is the difference between
   // telling someone they are owed money and telling them they are not.
-  assert.equal(note({ poolSats: 2_499, owedSats: 2_500 }).tone, 'warn', 'one satoshi short reads as covered');
-  assert.equal(note({ poolSats: 2_500, owedSats: 2_500 }).tone, '', 'exactly covered reads as a shortfall');
-  assert.equal(note({ poolSats: 1, owedSats: 0 }).tone, '', 'a positive pool with nothing owed is not a shortfall');
+  assert.equal(note({ poolSats: 2_499, owedAcrossEverybody: 2_500 }).tone, 'warn', 'one satoshi short reads as covered');
+  assert.equal(note({ poolSats: 2_500, owedAcrossEverybody: 2_500 }).tone, '', 'exactly covered reads as a shortfall');
+  // This line used to read `poolSats: 1, owedSats: 0` → tone '', i.e. it blessed a
+  // funded state that cannot pay even one reply. A positive balance is not the
+  // same as a payable one, and the fixture agreed with the defect.
+  assert.equal(
+    note({ poolSats: 1, owedAcrossEverybody: 0 }).tone,
+    'warn',
+    'one satoshi against a 250-sat guarantee reads as funded',
+  );
+  assert.match(
+    note({ poolSats: 1, owedAcrossEverybody: 0 }).text,
+    /less than the 250 sats a single reply is promised, so a reply taken now would be recorded and unpaid/,
+  );
+  // The control: one guarantee's worth with nothing owed IS covered, so the dust
+  // branch is not simply swallowing every small number.
+  assert.equal(
+    note({ poolSats: GUARANTEE, owedAcrossEverybody: 0 }).tone,
+    '',
+    'exactly one reply\'s worth with nothing owed reads as unfunded',
+  );
 });
 
 test('a covered pool still says where the money comes from, and when it stops', () => {
-  const covered = note({ poolSats: 250_000, owedSats: 2_500, ...twoMinutesAgo() });
+  const covered = note({ poolSats: 250_000, owedAcrossEverybody: 2_500, ...twoMinutesAgo() });
 
   assert.equal(
     covered.text,
-    'Paid 250 sats per answered reply, from a pool of 250,000 sats (read 2 minutes ago). The pool is the only ' +
-      'place payment comes from: while there is something in it the guarantee is paid, and when it is empty ' +
+    'Paid 250 sats per answered reply, from a pool of 250,000 sats (read 2 minutes ago). It covers the 2,500 ' +
+      'owed across everybody right now; the next replies are paid out of the same address, and when it is empty ' +
       'nothing is paid.',
   );
   // The funded state is the tempting one to state as an unconditional promise.
@@ -154,8 +172,10 @@ test('every state names the pool as the source, and none is skipped', () => {
   const states: Array<[string, any]> = [
     ['unreadable', note({ poolSats: null })],
     ['empty', note({ poolSats: 0 })],
-    ['partly funded', note({ poolSats: 1_000, owedSats: 2_500 })],
-    ['covered', note({ poolSats: 250_000, owedSats: 2_500 })],
+    // Funded below one reply: the state the old branch order rendered as covered.
+    ['dust', note({ poolSats: 1, owedAcrossEverybody: 0 })],
+    ['partly funded', note({ poolSats: 1_000, owedAcrossEverybody: 2_500 })],
+    ['covered', note({ poolSats: 250_000, owedAcrossEverybody: 2_500 })],
   ];
 
   let checked = 0;
@@ -176,10 +196,10 @@ test('every state names the pool as the source, and none is skipped', () => {
     checked += 1;
   }
 
-  assert.equal(checked, 4, 'the states were not all asserted on, so the loop above proves nothing');
+  assert.equal(checked, 5, 'the states were not all asserted on, so the loop above proves nothing');
   assert.equal(
     new Set(states.map(([, stated]) => stated.text)).size,
-    4,
+    5,
     'two states render identically, so the console cannot tell a responder which one they are in',
   );
 });

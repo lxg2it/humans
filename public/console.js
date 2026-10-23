@@ -123,8 +123,10 @@
     if (!earnings) return;
     const owed = earnings.owedSats;
     const rated = earnings.averageRating === null ? '' : ` · rated ${earnings.averageRating.toFixed(1)}/5`;
+    // "to you", because the note below says "across everybody" and the two used
+    // to be one word for two quantities on the same screen.
     $('earnings').textContent =
-      `${earnings.replies} answered · ${owed.toLocaleString()} sats owed${rated}`;
+      `${earnings.replies} answered · ${owed.toLocaleString()} sats owed to you${rated}`;
     $('earnings').title = `earned ${earnings.earnedSats} · paid ${earnings.paidSats} · owed ${owed}`;
 
     // Where it would go, said next to how much there is, so a person notices a
@@ -204,7 +206,7 @@
       guaranteeSats: me.guarantee_sats,
       poolSats: me.pool_sats,
       poolError: me.pool_error,
-      owedSats: me.earnings.owedSats,
+      owedAcrossEverybody: me.owed_across_everybody,
       readAt: me.pool_read_at,
     });
     note.textContent = stated.text;

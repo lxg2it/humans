@@ -30,6 +30,16 @@
   const sats = (value) => value.toLocaleString();
 
   /**
+   * A quantity with its unit, for the places the sentence counts real satoshis.
+   *
+   * "from a pool of 1 sats" is what the dust state renders without this, and dust
+   * is the state the sentence exists for — a pool that holds something and cannot
+   * pay a reply. The bare `sats()` is still used where the figure stands on its
+   * own, because there the unit is supplied by the words around it.
+   */
+  const satsUnit = (value) => (value === 1 ? '1 sat' : `${sats(value)} sats`);
+
+  /**
    * "4 minutes ago", for a reading whose age is part of what it means.
    *
    * The same formatter exists server-side in src/pool.ts, because a rendered page
@@ -55,7 +65,12 @@
   function note(figures) {
     const guarantee = figures.guaranteeSats;
     const pool = figures.poolSats;
-    const owed = figures.owedSats || 0;
+    // The SERVICE's obligation, not the reader's. A single responder's balance
+    // used to arrive here under this name while the sentence said "what has
+    // been promised", so the console and /pool answered "what is owed" with two
+    // different numbers. The parameter is named in full so that a caller passing
+    // the wrong one has to ignore the name to do it.
+    const owed = figures.owedAcrossEverybody || 0;
     // The reading's age, formatted here rather than handed in: the parenthetical
     // is part of the sentence, and a caller that formats it is a caller that can
     // format it differently. `undefined` is treated as no reading at all, so a
@@ -90,24 +105,41 @@
       };
     }
 
+    // Funded, but not enough for one reply. Nothing is owed yet, so the shortfall
+    // branch below cannot see this, and the covered branch would claim the
+    // guarantee "is paid while there is something in it" — which one satoshi does
+    // not make true. Dust is a real state and it reads as its own sentence.
+    if (owed <= 0 && pool < guarantee) {
+      return {
+        tone: 'warn',
+        text:
+          `Paid ${guarantee} sats per answered reply, from a pool of ${satsUnit(pool)}` +
+          `${reading}. That is less than the ${satsUnit(guarantee)} a single reply is promised, so a reply taken now ` +
+          `would be recorded and unpaid until the pool is topped up.`,
+      };
+    }
+
     // The case that matters and the one the two easy stories both get wrong: the
     // promise is neither dead nor fully backed, and the gap has a number on it.
     if (pool < owed) {
       return {
         tone: 'warn',
         text:
-          `Paid ${guarantee} sats per answered reply, from a pool of ${sats(pool)} sats` +
-          `${reading}. Already owed ${sats(owed)}, so ${sats(owed - pool)} of what has ` +
-          `been promised is recorded and unpaid.`,
+          `Paid ${guarantee} sats per answered reply, from a pool of ${satsUnit(pool)}` +
+          `${reading}. ${sats(owed)} is owed across everybody who has answered, so ` +
+          `${sats(owed - pool)} of what has been promised is recorded and unpaid.`,
       };
     }
 
     return {
       tone: '',
       text:
-        `Paid ${guarantee} sats per answered reply, from a pool of ${sats(pool)} sats` +
-        `${reading}. The pool is the only place payment comes from: while there is something in it the guarantee ` +
-        `is paid, and when it is empty nothing is paid.`,
+        `Paid ${guarantee} sats per answered reply, from a pool of ${satsUnit(pool)}` +
+        `${reading}. ` +
+        (owed > 0
+          ? `It covers the ${sats(owed)} owed across everybody right now; `
+          : `Nothing is owed across everybody right now; `) +
+        `the next replies are paid out of the same address, and when it is empty nothing is paid.`,
     };
   }
 
