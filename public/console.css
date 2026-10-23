@@ -61,6 +61,11 @@ p { margin: 6px 0; }
 #gate form { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; width: 380px; }
 #gate input { width: 100%; margin: 12px 0; }
 #gate button { width: 100%; }
+/* The gate's one link: where a responder key comes from. Styled the way the
+   landing pages style theirs, because this is the first anchor the console has
+   ever had and the browser default would be the only blue in the product. */
+#gate a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+#gate a:hover { border-bottom-color: var(--accent); }
 
 #main { display: flex; flex: 1; min-height: 0; }
 

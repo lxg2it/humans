@@ -129,7 +129,7 @@ export function checkSolution(input: Submitted, now: number = Date.now()): Solut
     return { ok: false, reason: 'no challenge was issued to you' };
   }
   if (typeof solution !== 'string' || !/^\d{1,16}$/.test(solution)) {
-    return { ok: false, reason: 'the checkbox was not completed' };
+    return { ok: false, reason: 'the arithmetic was not completed' };
   }
 
   const issuedAt = Number(issued);
@@ -166,18 +166,15 @@ export function checkSolution(input: Submitted, now: number = Date.now()): Solut
  * visitor with scripting off gets a disabled form and a line saying so, which is
  * a worse experience and an honest one; silently refusing them would be neither.
  *
- * Two wirings, because the declaration it gates exists on one side of the
- * service only. Where the form carries a checkbox, solving the arithmetic
- * releases it and ticking it submits — a person saying so in their own hand.
- * Where it does not, solving the arithmetic IS the submission, because the
- * caller side asks nothing of the kind and has no business pretending to.
- * Assuming the checkbox exists would throw a TypeError there and leave the
- * button dead, which is the failure this branch exists to prevent.
+ * One wiring, because neither form asks a question the arithmetic could gate:
+ * solving it IS the submission. There used to be a second branch for a
+ * declaration checkbox on the responder form, and it is gone rather than kept
+ * for a page that might come back — the declaration is asked at the first call
+ * taken, where the server records it, and a tick here would be decoration.
  */
 export const SOLVER_SCRIPT = `(function () {
   var form = document.getElementById('signup');
   if (!form) return;
-  var box = document.getElementById('human');
   var status = document.getElementById('human-status');
   var submit = document.getElementById('go');
   var seed = form.elements.seed.value;
@@ -227,18 +224,7 @@ export const SOLVER_SCRIPT = `(function () {
   solve(0).then(function (solution) {
     form.elements.solution.value = solution;
     var seconds = ((Date.now() - started) / 1000).toFixed(1);
-    if (box) {
-      box.disabled = false;
-      status.textContent = 'Done, in ' + seconds + ' seconds of arithmetic. Tick the box above and the key is yours.';
-    } else {
-      submit.disabled = false;
-      status.textContent = 'Done, in ' + seconds + ' seconds of arithmetic. That is the whole check.';
-    }
+    submit.disabled = false;
+    status.textContent = 'Done, in ' + seconds + ' seconds of arithmetic. That is the whole check.';
   });
-
-  if (box) {
-    box.addEventListener('change', function () {
-      submit.disabled = !box.checked;
-    });
-  }
 })();`;

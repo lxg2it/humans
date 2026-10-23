@@ -72,15 +72,17 @@ export function signupRouter(store: Store): Router {
 
   /**
    * The name is not an identity and does not pretend to be one. For a responder
-   * it is the model name the caller will be shown, which is why it is required
-   * there and optional for a caller: signing a reply is a different act from
-   * sending a request.
+   * it is the string the ledger keys earnings by and the name their console
+   * shows; it is NOT what a caller sees, because a reply names the model
+   * (`human-1`) and never the person. It is required for a responder and
+   * optional for a caller: signing a reply is a different act from sending a
+   * request.
    */
   function nameOf(raw: unknown, kind: SignupKind): { ok: true; name: string } | { ok: false; reason: string } {
     const text = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
     if (text === '') {
       return kind === 'responder'
-        ? { ok: false, reason: 'a responder needs a name: it is the model name the caller is shown' }
+        ? { ok: false, reason: 'a responder needs a name: it is the name the ledger keeps your credit against' }
         : { ok: true, name: 'anonymous' };
     }
     if (text.length > 64) return { ok: false, reason: 'that name is longer than 64 characters' };
@@ -95,8 +97,8 @@ export function signupRouter(store: Store): Router {
       return {
         ok: false,
         reason:
-          `somebody is already answering as "${text}". That name is the model name callers see, and it is what ` +
-          `the ledger keys earnings by, so it has to be yours alone. Pick another one.`,
+          `somebody is already answering as "${text}". That name is what the ledger keys earnings by, so it has to ` +
+          `be yours alone. Pick another one.`,
       };
     }
     return { ok: true, name: text };

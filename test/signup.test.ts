@@ -136,23 +136,22 @@ test('a malformed submission is refused rather than throwing', () => {
 /**
  * Runs the served script against a fake document and returns what it did.
  *
- * `withBox` exists because the form has two wirings: the responder side carries
- * a declaration the arithmetic releases, and the caller side carries none. A
- * harness that only builds the checkbox form would leave the caller branch
- * untested — and the caller branch is the one that would crash on a null box.
+ * The fake document is deliberately thin: `#signup`, its elements, the status
+ * line and the button. It has no `#human` node, because the served script must
+ * not want one — a missing element it reached for would throw a TypeError and
+ * leave the button dead, which is the failure an earlier branch existed to
+ * prevent and this one prevents by not looking.
  *
  * `bits` is a parameter because the difficulty is a property of the scheme and
- * not of the wiring. This matters more than it looks: the arithmetic is
- * geometric, so one solve in twenty takes four times the mean and one in three
- * thousand takes eight times it, and a wiring test that runs four solves at
- * shipped difficulty is a coin toss against any deadline. Measured: 2 failures
- * in 8 runs of this file when every solve was at CHALLENGE_BITS against the
- * default 4s wait, both of them this test timing out rather than failing. The
- * gate below is exercised at a low difficulty, where its subject is the wiring;
- * the shipped difficulty is exercised, at both wirings, by the agreement test
- * above, which is the test that would notice a difficulty of zero.
+ * not of the wiring, and the arithmetic is geometric: one solve in twenty takes
+ * four times the mean, and one in three thousand eight times it. Measured: 2
+ * failures in 8 runs of this file when every solve ran at CHALLENGE_BITS
+ * against a 4s wait, both of them this test timing out rather than failing. The
+ * wiring is therefore exercised at a low difficulty, where its subject is the
+ * wiring; the shipped difficulty is exercised by the agreement test, which is
+ * the test that would notice a difficulty of zero.
  */
-async function runSolver(withBox: boolean, bits = 12, deadlineMs = 10_000) {
+async function runSolver(bits = 12, deadlineMs = 10_000) {
   const challenge = issueChallenge();
   const solutionField = { value: '' };
   const elements: Record<string, unknown> = {
@@ -161,18 +160,12 @@ async function runSolver(withBox: boolean, bits = 12, deadlineMs = 10_000) {
     solution: solutionField,
   };
   const listeners: Array<() => void> = [];
-  const box = {
-    disabled: true,
-    checked: false,
-    addEventListener: (_event: string, fn: () => void) => listeners.push(fn),
-  };
   const status = { textContent: '' };
   const submit = { disabled: true };
 
   const document = {
     getElementById: (id: string) => {
       if (id === 'signup') return { elements };
-      if (id === 'human') return withBox ? box : null;
       if (id === 'human-status') return status;
       if (id === 'go') return submit;
       return null;
@@ -181,42 +174,27 @@ async function runSolver(withBox: boolean, bits = 12, deadlineMs = 10_000) {
 
   new Function('document', SOLVER_SCRIPT)(document);
   await until(async () => solutionField.value !== '', deadlineMs);
-  return { challenge, solutionField, box, listeners, status, submit };
+  return { challenge, solutionField, listeners, status, submit };
 }
 
-test("the browser's script produces a solution the server accepts, at the shipped difficulty, with and without the declaration", async () => {
-  for (const withBox of [true, false]) {
-    // 30s, not the default 4s: this is the one test that must run at the
-    // difficulty the service actually ships, and its tail is real.
-    const { challenge, solutionField, status } = await runSolver(withBox, CHALLENGE_BITS, 30_000);
-    assert.match(status.textContent, /arithmetic/, `no status text when withBox=${withBox}`);
-    const verdict = checkSolution({ ...challenge, solution: solutionField.value }, Number(challenge.issued));
-    assert.deepEqual(verdict, { ok: true }, `the browser and the server disagree when withBox=${withBox}`);
-  }
+test("the browser's script produces a solution the server accepts, at the shipped difficulty", async () => {
+  // 30s, not the default 4s: this is the one test that must run at the
+  // difficulty the service actually ships, and its tail is real.
+  const { challenge, solutionField, status } = await runSolver(CHALLENGE_BITS, 30_000);
+  assert.match(status.textContent, /arithmetic/, 'no status text');
+  const verdict = checkSolution({ ...challenge, solution: solutionField.value }, Number(challenge.issued));
+  assert.deepEqual(verdict, { ok: true }, 'the browser and the server disagree');
 });
 
-test('the declaration gates the button on one side, and only that side waits for a click', async () => {
-  // The responder side: the box is released by the arithmetic, and the submit is
-  // still refused until a person has ticked it. The old harness stubbed
-  // addEventListener as a no-op, so it could not see this gate at all — the
-  // script could have submitted on the solver's own say-so and every assertion
-  // would still have passed.
-  const declared = await runSolver(true);
-  assert.equal(declared.box.disabled, false, 'the arithmetic must release the declaration');
-  assert.equal(declared.submit.disabled, true, 'the form submits before anything was declared');
-  assert.equal(declared.listeners.length, 1, 'nothing is listening for the declaration');
-  declared.box.checked = true;
-  declared.listeners[0]!();
-  assert.equal(declared.submit.disabled, false, 'ticking the declaration must release the button');
-  declared.box.checked = false;
-  declared.listeners[0]!();
-  assert.equal(declared.submit.disabled, true, 'unticking the declaration must take the button back');
-
-  // The caller side: nobody is asked whether they are a person, so nobody waits
-  // to be asked. The arithmetic is the whole gate.
-  const undeclared = await runSolver(false);
-  assert.equal(undeclared.submit.disabled, false, 'the caller form waits for a declaration it does not make');
-  assert.equal(undeclared.listeners.length, 0, 'the caller form wired a listener to a box that is not there');
+test('the arithmetic is the whole gate, and the script asks nothing else of the page', async () => {
+  // Nobody is asked whether they are a person on either form any more, so the
+  // submit is released by the solver's own say-so — and nothing is wired to a
+  // declaration node. Both directions matter: a script that waited for a tick
+  // would leave every visitor on a dead button, and one that reached for a
+  // missing `#human` would throw before enabling anything.
+  const solved = await runSolver();
+  assert.equal(solved.submit.disabled, false, 'the form waits for something the page no longer asks for');
+  assert.equal(solved.listeners.length, 0, 'the script wired a listener to a declaration that is not there');
 });
 
 test('signing up mints a caller key that authenticates', async () => {
@@ -260,11 +238,15 @@ test('signing up mints a caller key that authenticates', async () => {
   }
 });
 
-test('a responder needs a name, because that name is the model the caller is shown', async () => {
+test('a responder needs a name, because the credit is kept against it', async () => {
   const h = await harness();
   try {
     const page = await h.call('/signup?as=responder');
-    assert.match(page.body as string, /the model name the caller is shown/);
+    // The reason, stated on the page. It used to read "the model name the caller
+    // is shown", which is not true of any reply this service sends, and the
+    // refusal carried the same sentence.
+    assert.match(page.body as string, /keeps your credit against|credit is kept against/);
+    assert.doesNotMatch(page.body as string, /model name the caller is shown/);
     const challenge = challengeFrom(page.body as string);
 
     const unnamed = await postForm(h.base, { as: 'responder', ...challenge, solution: solve(challenge.seed) });
@@ -324,39 +306,87 @@ test('a submission that did no work is refused, and gets a working form back', a
   }
 });
 
-test('the humanity declaration is on the side of the service that needs one', async () => {
+test('the declaration is asked at the first call, not at signup, and each side says which', async () => {
   const h = await harness();
   try {
     const caller = (await h.call('/signup')).body as string;
     const responder = (await h.call('/signup?as=responder')).body as string;
 
-    // The responder is the person: the declaration is theirs, and it says what
-    // they are undertaking rather than merely what they are.
-    assert.match(responder, /id="human"/, 'the answering side no longer asks the person to say so');
-    assert.match(
-      responder,
-      /I am a human, and I will answer these calls myself/,
-      'the declaration no longer names the thing being undertaken',
-    );
-
-    // The caller is a key, not an account, and usually not a person at all.
-    // Scott's correction, 2026-10-16: an API-key form is exactly where nobody
-    // cares, so a declaration here would be asking the wrong reader.
+    // Neither form asks. A key is a seat rather than a decision to sit down, and
+    // the checkbox that used to be here was a tick the server never saw: the
+    // claim route asks the same question again, at the only moment it means
+    // anything. The recording is tested in test/declaration.test.ts.
+    assert.doesNotMatch(responder, /id="human"/, 'the responder form asks for a declaration again');
+    assert.doesNotMatch(responder, /I am a human/, 'the responder form asks for a declaration again');
     assert.doesNotMatch(caller, /id="human"/, 'the caller form asks for a declaration again');
     assert.doesNotMatch(caller, /I am a human/, 'the caller form asks for a declaration again');
 
-    // And the absence is stated, rather than left for a reader to assume they
-    // passed a check. An agent reading this page should not be left wondering.
+    // The absence on the caller side is stated, rather than left for a reader to
+    // assume they passed a check. Scott's correction, 2026-10-16: an API-key form
+    // is exactly where nobody cares, so a declaration there asks the wrong reader.
     assert.match(
       caller,
       /No humanity check on this side/,
       'the caller form removed the check without saying so',
     );
 
-    // The requirement belongs where the answering happens too, not only on the
-    // signup form: /answer is where somebody decides to take the job.
+    // The responder is told when they will be asked, so the question on the
+    // claim bar is not a surprise when they get there.
+    assert.match(
+      responder,
+      /when you take your first call/,
+      'the responder form no longer says when the declaration happens',
+    );
+    assert.match(
+      responder,
+      /in your own hand/,
+      'the responder form no longer says the declaration is theirs to make',
+    );
+
+    // /answer is where somebody decides to take the job, so it carries the same
+    // ask and the same timing.
     const answer = (await h.call('/answer')).body as string;
     assert.match(answer, /answer as yourself/, 'the answering page drops the one thing asked of a responder');
+    assert.match(answer, /take your first call/, 'the answering page no longer says when the ask happens');
+  } finally {
+    await h.close();
+  }
+});
+
+test('the name a responder picks is theirs, and the caller is never shown it', async () => {
+  const h = await harness();
+  try {
+    const responder = (await h.call('/signup?as=responder')).body as string;
+    // The reply names the model. The page asserted the opposite until
+    // 2026-10-23 — that the chosen name was the reply's `model` field — while
+    // docs/answering.md, the landing model card and resolveModel all said
+    // human-1. This is the regression guard for the copy, not for the code.
+    assert.doesNotMatch(
+      responder,
+      /model name the caller is shown/,
+      'the signup page promises callers the responder name again',
+    );
+    assert.match(
+      responder,
+      /Callers never see it|never your name/,
+      'the signup page no longer says the caller does not see the name',
+    );
+
+    // And the result page, which is what the person reads once they hold a key.
+    const challenge = challengeFrom(responder);
+    const minted = await postForm(h.base, {
+      as: 'responder',
+      ...challenge,
+      solution: solve(challenge.seed),
+      name: 'ada-plain',
+    });
+    assert.equal(minted.status, 201);
+    assert.match(minted.body, /human-1/, 'the result page does not say what the caller will see');
+    assert.doesNotMatch(
+      minted.body,
+      /the name the caller will be shown/,
+      'the result page promises the caller the responder name again',
+    );
   } finally {
     await h.close();
   }

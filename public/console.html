@@ -42,6 +42,10 @@
         </p>
         <input id="gate-key" type="password" autocomplete="off" placeholder="hmn_..." />
         <button type="submit">Sign in</button>
+        <p class="muted small">
+          No key yet? <a href="/signup?as=responder">One is minted here</a>, on the spot and without asking anybody.
+          A caller key (<code>sk_...</code>) will not work on this side: this page needs the key you answer with.
+        </p>
         <p id="gate-error" class="error" hidden></p>
       </form>
     </section>
@@ -84,7 +88,9 @@
               <!--
                 Asked once, here, at the first call taken — the point at which
                 someone is actually answering rather than merely holding a key.
-                The same sentence is on the signup form; the server refuses a
+                This is the only place it is asked: a key is a seat, and asking
+                before somebody has chosen to sit down asks them to agree to
+                something they have not decided to do. The server refuses a
                 first claim that arrives without it, so it is a record rather
                 than a decoration.
               -->

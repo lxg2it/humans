@@ -68,6 +68,60 @@ test('the landing page carries the claims the documents require of it', async ()
   }
 });
 
+test('every page that promises or asks for a key says where to get it', async () => {
+  const h = await harness();
+  try {
+    // R1 on /answer: step one says a key is minted on the spot, so that sentence
+    // carries the link. It pointed at "the notice above the form" in wording
+    // while the href went to the mint, which is a link a stranger cannot see.
+    const answer = (await h.call('/answer')).body as string;
+    assert.ok(
+      internalLinks(answer).includes('/signup?as=responder'),
+      'the answering page no longer links to the responder mint',
+    );
+    assert.match(
+      answer,
+      /<a href="\/signup\?as=responder">[^<]*minted[^<]*<\/a>/i,
+      'the link to the mint is there but its text does not say so',
+    );
+
+    // R2 on the console: the gate asks for a responder key, so it must offer a
+    // route to one. This is the defect a visitor reported on 2026-10-23 — the
+    // site offered him a key, he took it, and the console then demanded one.
+    const console_ = (await h.call('/console')).body as string;
+    assert.match(
+      console_,
+      /<a href="\/signup\?as=responder">/,
+      'the console gate asks for a key it does not say how to get',
+    );
+
+    // R3 on both signup forms: they share one route, so a visitor who arrives at
+    // the wrong one has to be able to cross over from the page itself.
+    const caller = (await h.call('/signup')).body as string;
+    const responder = (await h.call('/signup?as=responder')).body as string;
+    assert.ok(internalLinks(caller).includes('/signup?as=responder'), 'the caller form has no way to the responder form');
+    assert.ok(internalLinks(responder).includes('/signup'), 'the responder form has no way to the caller form');
+  } finally {
+    await h.close();
+  }
+});
+
+test('the reply names the model, and every page says so the same way', async () => {
+  const h = await harness();
+  try {
+    // One claim, one home (docs/answering.md §"The caller does not see your
+    // name"), and this is the guard that the pages keep agreeing with it.
+    const build = (await h.call('/build')).body as string;
+    assert.match(build, /human-1/, 'the build page no longer says what the reply calls the model');
+    assert.match(build, /never the person/, 'the build page no longer separates the model id from the person');
+
+    const answer = (await h.call('/answer')).body as string;
+    assert.match(answer, /The caller does not see/, 'the answering page no longer says the name stays private');
+  } finally {
+    await h.close();
+  }
+});
+
 test('every internal link on every landing page resolves', async () => {
   const h = await harness();
   try {

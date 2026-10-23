@@ -440,12 +440,16 @@ ${rows}
           <ol class="steps">
             <li>
               <h3>Get a responder key</h3>
-              <p>A key is minted on the spot, and you choose the name you answer under &mdash; it is the model
-              name the caller is shown. There is no vetting, because a key is a seat rather than a privilege and
-              the service would rather be answerable for who it lets in than pretend a form can tell.</p>
-              <p class="muted">The one thing asked of you is in
-              <a href="/signup?as=responder">the notice above the form</a>. It is a sentence, and it is the only
-              thing standing between this and every model on the internet doing it cheaper.</p>
+              <p><a href="/signup?as=responder">One is minted here</a>, on the spot, and you choose the name you
+              answer under. That name is what the ledger keeps and what your console shows; the caller is never
+              shown it, because the reply says <code>human-1</code> whatever you pick. There is no vetting: a key
+              is a seat rather than a privilege, and the service would rather be answerable for who it lets in
+              than pretend a form can tell.</p>
+              <p class="muted">You will be asked one thing, and it is a sentence rather than a check: that you are
+              a person and will answer these calls yourself. It is asked when you take your first call, not here,
+              because until you have decided to sit down there is nothing to agree to. Nothing can verify the
+              answer. It is the only thing standing between this and every model on the internet doing it
+              cheaper.</p>
             </li>
             <li>
               <h3>Open the console and paste it in</h3>
@@ -654,8 +658,9 @@ export ANTHROPIC_API_KEY=sk_...        # your caller key`;
             </li>
             <li>
               <h3>Send a request</h3>
-              <p>An ordinary request. <code>model</code> may be any id you like and the response names the model
-              that answered, so a client with a model name baked into it does not need changing.</p>
+              <p>An ordinary request. <code>model</code> may be any id you like: an unrecognised one is accepted and
+              the reply comes back as <code>human-1</code>, so a client with a model name baked into it does not
+              need changing. The reply names the model, never the person who answered it.</p>
               ${code(curl)}
             </li>
             <li>
@@ -773,11 +778,11 @@ const RESPONDER_NOTICE =
  * out immediately that there is not one, rather than assume it was passed.
  */
 const RESPONDER_CHALLENGE_NOTE =
-  `<li><strong>That checkbox is not a test of humanity.</strong> There is no such test. Anything a person can ` +
-  `solve, a machine solves faster, so a check claiming to separate us is either guessing or lying. What this one ` +
-  `does is make you run a second of arithmetic: enough to stop software that fills in every form it finds, and ` +
-  `nothing at all to anyone who is actually trying. If that is you, the notice above is the real ask, and it is ` +
-  `only a sentence.</li>`;
+  `<li><strong>The arithmetic on this form is not a test of humanity.</strong> There is no such test. Anything a ` +
+  `person can solve, a machine solves faster, so a check claiming to separate us is either guessing or lying. What ` +
+  `this one does is make you run a second of arithmetic: enough to stop software that fills in every form it finds, ` +
+  `and nothing at all to anyone who is actually trying. The ask that matters is the notice above, and all of it is ` +
+  `one sentence. You will be asked to say it again, in your own hand, when you take your first call.</li>`;
 
 const CALLER_CHALLENGE_NOTE =
   `<li><strong>Nothing on this page asks whether you are a person.</strong> Callers are usually programs, and this ` +
@@ -786,22 +791,23 @@ const CALLER_CHALLENGE_NOTE =
   `you run a second of arithmetic — enough to stop software that fills in every form it finds, and nothing at all ` +
   `to anyone who actually means it.</li>`;
 
-/**
- * The humanity declaration, and it is on one side of the service only.
+/*
+ * There is no declaration on this form, on either side, and that is the design
+ * rather than an omission.
  *
- * Scott's correction, 2026-10-16: the caller key is exactly where nobody cares
- * whether a person or a program is asking, because a program asking is the
- * ordinary case and the reason the API exists. A declaration there is not merely
- * useless, it contradicts the notice directly above it, which welcomes agents.
- * The side that needs a person is the answering side — so the declaration is on
- * the responder form and nowhere else, and it is a declaration rather than a
- * check, which the page says in the same breath.
+ * The caller side asks nothing about what you are, because a program calling is
+ * the ordinary case and the reason the API exists: a declaration there would
+ * contradict the notice directly above it, which welcomes agents.
+ *
+ * The responder side does declare, but at the first call taken rather than here.
+ * A checkbox on this form was the earlier shape of it, and it was wrong twice
+ * over: the server never saw the tick, so it recorded nothing, and the claim
+ * route asks the same question again at the only moment it means anything. A key
+ * is a seat; asking somebody to declare what they are before they have chosen to
+ * sit down asks them to agree to something they have not decided to do yet. The
+ * gate lives in `POST /api/requests/:id/claim`, and the console will not spend
+ * a first claim without it.
  */
-const RESPONDER_CHECK =
-  `            <div class="human">
-              <input type="checkbox" id="human" disabled />
-              <label for="human">I am a human, and I will answer these calls myself</label>
-            </div>`;
 
 const CALLER_CHECK =
   `<p class="muted small"><strong>No humanity check on this side.</strong> A caller is usually a program, and ` +
@@ -829,15 +835,17 @@ export function signupPage(
   const hero = band(
     `          <p class="eyebrow">${caller ? 'call the model' : 'be the model'}</p>
           <h1 class="headline">${
-            caller ? 'Get a key. Nobody has to hand you one.' : 'Ask to be the model.'
+            caller ? 'Get a key. Nobody has to hand you one.' : 'Answer calls. Nobody has to approve you.'
           }</h1>
           <p class="lede">${
             caller
               ? 'A caller key is a handle, not a privilege. It says who sent a request and gives us something to ' +
                 'revoke; it buys no compute and it is not scarce, so it is minted here rather than by a person who ' +
                 'might be asleep when you arrive.'
-              : 'A responder key lets you read the queue and answer calls. The name you choose below is the model ' +
-                'name the caller is shown, so it is the one field here that is not optional.'
+              : 'A responder key lets you read the queue and answer calls, and it is minted the moment you submit ' +
+                'this: there is no vetting and nobody to ask. The name you choose is the one the ledger keeps your ' +
+                'credit against and the one your console shows. Callers never see it, so pick a name rather than ' +
+                'an advertisement.'
           }</p>`,
     'hero slim',
   );
@@ -865,7 +873,8 @@ export function signupPage(
             <p class="muted small">${
               caller
                 ? 'Optional, and it only ever appears in the ledger. A caller is a key, not an account.'
-                : 'This is the <code>model</code> field of the reply, and it is what the caller is told answered them.'
+                : 'Required, because the credit is kept against it and two people cannot answer under one name. ' +
+                  'The reply a caller receives says <code>human-1</code> and never your name.'
             }</p>
             ${
               caller
@@ -878,7 +887,6 @@ export function signupPage(
             you if anything is owed. You can set or change this later from the console, so a wallet you rotate
             next year is not a wallet you are stuck with.</p>`
             }
-            ${caller ? '' : RESPONDER_CHECK}
             <p class="muted small" id="human-status">Doing some arithmetic&hellip;</p>
             ${caller ? CALLER_CHECK : ''}
             <noscript>
@@ -890,6 +898,11 @@ export function signupPage(
               <button id="go" class="btn btn-primary" type="submit" disabled>Get the key <span class="arrow">&rarr;</span></button>
             </div>
           </form>
+          <p class="muted small">${
+            caller
+              ? 'Want to answer calls rather than send them? <a href="/signup?as=responder">A responder key is minted here</a>.'
+              : 'Want to send requests rather than answer them? <a href="/signup">A caller key is minted here</a>.'
+          }</p>
           <script>${SOLVER_SCRIPT}</script>`,
   );
 
@@ -967,9 +980,12 @@ export function signupResultPage(
           <div class="cta">
             <button id="copy" class="btn" type="button">Copy it</button>
           </div>
-          <p class="muted small">Answered as <strong>${escapeText(name)}</strong>${
-            caller ? '' : ', which is the name the caller will be shown'
-          }.</p>
+          <p class="muted small">${
+            caller
+              ? `Sending as <strong>${escapeText(name)}</strong>.`
+              : `Answering as <strong>${escapeText(name)}</strong> — the name your console shows and your credit is ` +
+                `kept against. Callers are never shown it: the reply says <code>human-1</code>.`
+          }</p>
           ${
             caller
               ? ''
