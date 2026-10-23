@@ -121,7 +121,8 @@ test('a partly funded pool puts a number on the shortfall', () => {
   assert.equal(
     partial.text,
     'Paid 250 sats per answered reply, from a pool of 1,000 sats (read 2 minutes ago). 2,500 is owed across ' +
-      'everybody who has answered, so 1,500 of what has been promised is recorded and unpaid.',
+      'everybody who has answered, so 1,500 of what has been promised is recorded and unpaid. A reply taken ' +
+      'now would be paid only if the pool is topped up.',
   );
   assert.equal(partial.tone, 'warn', 'a shortfall is not a calm state to read');
 
@@ -129,7 +130,10 @@ test('a partly funded pool puts a number on the shortfall', () => {
   // it carry separators so five- and six-figure sums can be read at a glance.
   const bigger = note({ poolSats: 2_000, owedAcrossEverybody: 12_500 });
   assert.match(bigger.text, /from a pool of 2,000 sats/);
-  assert.match(bigger.text, /12,500 is owed across everybody who has answered, so 10,500 of what has been promised is recorded and unpaid/);
+  assert.match(
+    bigger.text,
+    /12,500 is owed across everybody who has answered, so 10,500 of what has been promised is recorded and unpaid\. A reply taken now would be paid only if the pool is topped up\./,
+  );
 
   // The boundary, in both directions: one satoshi short is a shortfall, and
   // exactly covered is covered. An off-by-one here is the difference between

@@ -131,7 +131,8 @@
         text:
           `Paid ${guarantee} sats per answered reply, from a pool of ${satsUnit(pool)}` +
           `${reading}. ${sats(owed)} is owed across everybody who has answered, so ` +
-          `${sats(owed - pool)} of what has been promised is recorded and unpaid.`,
+          `${sats(owed - pool)} of what has been promised is recorded and unpaid. A reply taken now would be ` +
+          `paid only if the pool is topped up.`,
       };
     }
 
