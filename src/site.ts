@@ -157,7 +157,7 @@ function poolBalanceSentence(pool: PoolReading): string {
     return `${pool.sats.toLocaleString()} satoshis, ${age} — the chain could not be reached just now ` +
       `(${pool.error}), so this figure is the last one that could be.`;
   }
-  return `${pool.sats.toLocaleString()} satoshis, ${age}.`;
+  return `${satsWord(pool.sats)}, ${age}.`;
 }
 
 /**
@@ -169,12 +169,31 @@ function poolBalanceSentence(pool: PoolReading): string {
  * not empty, so nobody thinks the promise is dead, and it is not enough, so
  * every promise outstanding is worth less than it says.
  */
+/**
+ * "1 satoshi", "2 satoshis". The figure can be one, and it is exactly one in the
+ * dust state below, where the sentence is about there being almost nothing.
+ */
+function satsWord(value: number): string {
+  return `${value.toLocaleString()} ${value === 1 ? 'satoshi' : 'satoshis'}`;
+}
+
 function coverage(held: number | null, owed: number): string {
   if (held === null) {
     return 'cannot be worked out, because the balance above has not been read.';
   }
+  // Dust first: a balance too small to pay one reply is not a funded state, and
+  // "nothing is owed, so there is nothing to cover" reads as though the fund is
+  // fine. It is the same state the console calls out before a person takes a
+  // call, and the page a donor reads has to name it too.
+  if (owed <= 0 && held < config.guaranteeSats) {
+    return (
+      `<strong>not one reply's worth.</strong> ${satsWord(held)} held, which is less than the ` +
+      `${satsWord(config.guaranteeSats)} a single reply is promised, so nothing is paid out of it until it is ` +
+      `topped up. Nothing is owed at the moment, so nobody is waiting on the difference.`
+    );
+  }
   if (owed <= 0) {
-    return `nothing is owed at the moment, so there is nothing to cover. Held: ${held.toLocaleString()} satoshis.`;
+    return `nothing is owed at the moment, so there is nothing to cover. Held: ${satsWord(held)}.`;
   }
   if (held >= owed) {
     const spare = held - owed;
@@ -891,8 +910,8 @@ export function signupPage(
               <a href="/answering">answering</a> page applies the moment you take a call.</li>`
               }
               <li><strong>There is nothing to pay and nothing to earn.</strong> Calls cost the caller nothing and
-              answers are a thank-you, not a wage, paid from <a href="/pool">the fund</a> while the fund holds
-              something: when it is empty, nothing is paid. ${config.guaranteeSats} satoshis is not a reason to do
+              answers are a thank-you, not a wage, paid from <a href="/pool">the fund</a> while the fund covers a
+              reply: when it is empty, or short of one, nothing is paid. ${config.guaranteeSats} satoshis is not a reason to do
               this and <a href="/money">the money</a> says so at length.</li>
             </ol>
           </div>`,

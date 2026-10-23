@@ -3,6 +3,7 @@ import { createApp } from './app.ts';
 import { config } from './config.ts';
 import { Store } from './db.ts';
 import { Queue } from './queue.ts';
+import { createPoolReader } from './pool.ts';
 
 /**
  * The entry point. Opens the store, listens, and sweeps.
@@ -20,7 +21,36 @@ const store = new Store(dbPath, {
   poolSats: config.poolSats,
 });
 const queue = new Queue(store);
-const app = createApp(store, queue);
+// One reader for the whole process: the console, the fund page and the health
+// endpoint are all describing the same pot of money, and a reader each meant
+// they could disagree — and each paid its own cold start, which is how a healthy
+// box told the first visitor after a restart that the balance could not be read.
+const pool = createPoolReader();
+const app = createApp(store, queue, pool);
+
+/*
+ * Read the fund at boot, before anybody asks.
+ *
+ * The reading is deliberately non-blocking: `read()` answers from what it knows
+ * and refreshes behind the request, so no page ever waits on the chain. The
+ * consequence is that the first request after a restart finds nothing known yet
+ * and renders "could not be read" — a sentence that exists for an outage,
+ * shown instead as a routine warm-up, which is the same defect as any other two
+ * states rendering alike. Warming here costs one fetch at start and removes it.
+ */
+void pool
+  .refresh()
+  .then((reading) => {
+    if (reading.sats === null) {
+      console.log(`[humans] the fund could not be read at boot (${reading.error ?? 'no fetch completed'}).`);
+      return;
+    }
+    console.log(`[humans] the fund holds ${reading.sats} sats, read at boot.`);
+  })
+  .catch((error: unknown) => {
+    // A warm-up that fails is not a crash: the next request retries it.
+    console.log(`[humans] the fund could not be read at boot (${String(error)}).`);
+  });
 
 const server = app.listen(config.port, config.host, () => {
   const address = `http://${config.host}:${config.port}`;

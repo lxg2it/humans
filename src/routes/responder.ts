@@ -368,7 +368,10 @@ export function responderRouter(
     res.json({
       entries: store.ledgerFor(responder.name, limit),
       earnings: store.earnings(responder.name),
-      pool_sats: config.poolSats,
+      // The same reading /api/me reports, so the two endpoints cannot describe
+      // the fund differently at the same moment.
+      pool_sats: pool.read().sats,
+      pool_declared: pool.read().declared,
       guarantee_sats: config.guaranteeSats,
     });
   });

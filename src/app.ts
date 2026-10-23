@@ -6,6 +6,8 @@ import { config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Queue } from './queue.ts';
 import { errorHandler } from './http.ts';
+import { createPoolReader } from './pool.ts';
+import type { PoolReader } from './pool.ts';
 import { messagesRouter } from './routes/messages.ts';
 import { ratingsRouter, responderRouter } from './routes/responder.ts';
 import { adminRouter } from './routes/admin.ts';
@@ -20,7 +22,7 @@ import { signupRouter } from './routes/signup.ts';
 
 const publicDir = join(import.meta.dirname, '../public');
 
-export function createApp(store: Store, queue: Queue): Express {
+export function createApp(store: Store, queue: Queue, pool: PoolReader = createPoolReader()): Express {
   const app = express();
 
   // Behind a proxy, req.ip is the proxy's. Trusting it blindly would let anyone
@@ -30,10 +32,15 @@ export function createApp(store: Store, queue: Queue): Express {
   app.use(express.json({ limit: config.maxBodyBytes }));
 
   app.get('/healthz', (_req, res) => {
+    // The reading, not the declared setting: with an address configured these
+    // are two different numbers, and a health endpoint that reports the setting
+    // says 0 for a fund holding a million and 0 for one holding nothing.
+    const reading = pool.read();
     res.json({
       ok: true,
       pending_calls: queue.pending(),
-      pool_sats: config.poolSats,
+      pool_sats: reading.sats,
+      pool_declared: reading.declared,
       // Said plainly, because it is the difference between a service that can be
       // charged for and one that cannot.
       caller_keys_required: config.requireCallerKey,
@@ -42,7 +49,7 @@ export function createApp(store: Store, queue: Queue): Express {
 
   app.use(messagesRouter(store, queue));
   app.use(ratingsRouter(store));
-  app.use(responderRouter(store, queue));
+  app.use(responderRouter(store, queue, pool));
   app.use(adminRouter(store, queue));
 
   // The prose: what this is, what the money is, what answering involves. Read
@@ -52,7 +59,7 @@ export function createApp(store: Store, queue: Queue): Express {
 
   // The landing pages. Rendered per request rather than served from a file,
   // because the traffic chart is a live reading of the database.
-  app.use(siteRouter(store));
+  app.use(siteRouter(store, pool));
 
   // Self-service keys. Until this existed every key was minted by hand, which
   // made the operator the front door — see src/routes/signup.ts.
