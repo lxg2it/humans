@@ -12,7 +12,8 @@
     "start": "node src/index.ts",
     "admin": "node scripts/admin.ts",
     "typecheck": "tsc -p tsconfig.test.json",
-    "test": "HUMANS_ADMIN_KEY=test-admin-key node --test \"test/*.test.ts\""
+    "test": "HUMANS_ADMIN_KEY=test-admin-key node --test \"test/*.test.ts\"",
+    "states": "node scripts/fund-states.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

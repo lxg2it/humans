@@ -243,7 +243,15 @@ starts being an oddity, so the semantics are written down rather than inferred.
 npm test                        # end-to-end over HTTP, against a real server and a real SQLite file
 npm run typecheck
 scripts/container-smoke.sh      # builds the deployment image and drives it
+npm run states                  # the fund's five states on ports 3100-3104, to look at in a browser
 ```
+
+`npm run states` is a harness rather than a test: the suite asserts the
+sentences, and this puts them in front of a person next to the number they are
+about. Four of the five fund states cannot be produced with real money, so it
+hands the app a reader carrying the figure under test; the unreadable state is
+produced the way it will happen, through the shipped reader against an endpoint
+that refuses.
 
 Tests cover the contract rather than the implementation: that a request is
 answered exactly once even if the submit is replayed, that two responders racing
