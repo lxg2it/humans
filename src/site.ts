@@ -57,8 +57,8 @@ function thankYou(): string {
     // the operator meant to make one, so it cannot be printed without the
     // condition attached, and there is no way to call this function and get an
     // unconditional guarantee out of it.
-    `It is paid out of <a href="/pool">the fund</a>, and only while the fund holds something: when it is empty, ` +
-    `nothing is paid and the credit waits.`
+    `It is paid out of <a href="/pool">the fund</a>, and nothing is paid until the fund covers a reply: when it is ` +
+    `empty — or short of one reply — nothing is paid and the credit waits.`
   );
 }
 

@@ -3,17 +3,20 @@
  *
  * The console tells a person what they will be paid for answering, and the
  * honest answer is conditional: the money comes from the pool address, so it is
- * paid while the pool holds something and not paid when it is empty. A figure
- * stated without that condition is an unconditional promise, which is the one
- * thing this service cannot have on its screen while someone decides whether to
- * work.
+ * paid while the pool covers a reply and not paid once it is empty or short of
+ * one. A figure stated without that condition is an unconditional promise, which
+ * is the one thing this service cannot have on its screen while someone decides
+ * whether to work. Note "covers a reply" rather than "holds something": the
+ * earlier wording asserted that anything in the pool paid, which a single
+ * satoshi does not make true — so the sentence written to be conditional carried
+ * a false sufficiency inside it, on every branch.
  *
  * It lives here, rather than inside console.js, because these sentences were
  * previously built at runtime from /api/me and were therefore invisible to every
  * test that reads the pages: the copy the responder actually reads was the only
  * copy nothing checked. This file takes the figures and returns the sentence and
  * its tone, with no DOM and no clock — the console supplies both, and the test
- * supplies the four states a person can be in.
+ * supplies the five states a person can be in.
  *
  * The order of the branches is the whole function. `poolSats` is null when the
  * instance reads its balance from the chain and the chain could not be reached,
@@ -91,8 +94,8 @@
         text:
           `The guarantee is ${guarantee} sats per reply. The pool balance could not be read` +
           `${figures.poolError ? ` — ${figures.poolError}` : ''}, so whether it is funded is unknown right now. ` +
-          `That is a missing figure, not an empty one: while the pool holds something the guarantee is paid, and ` +
-          `when it is empty nothing is paid.`,
+          `That is a missing figure, not an empty one: nothing is paid until the pool covers a reply, and nothing ` +
+          `is paid once it is empty.`,
       };
     }
 
@@ -106,9 +109,10 @@
     }
 
     // Funded, but not enough for one reply. Nothing is owed yet, so the shortfall
-    // branch below cannot see this, and the covered branch would claim the
-    // guarantee "is paid while there is something in it" — which one satoshi does
-    // not make true. Dust is a real state and it reads as its own sentence.
+    // branch below cannot see this, and without its own branch it fell to the
+    // covered one — which said the guarantee is paid whenever the pool holds
+    // anything, and one satoshi does not make that true. Dust is a real state and
+    // it reads as its own sentence.
     if (owed <= 0 && pool < guarantee) {
       return {
         tone: 'warn',

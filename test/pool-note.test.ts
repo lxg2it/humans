@@ -66,9 +66,15 @@ test('an unreadable balance is a missing figure, never an empty one', () => {
   assert.equal(
     unknown.text,
     'The guarantee is 250 sats per reply. The pool balance could not be read, so whether it is funded is ' +
-      'unknown right now. That is a missing figure, not an empty one: while the pool holds something the ' +
-      'guarantee is paid, and when it is empty nothing is paid.',
+      'unknown right now. That is a missing figure, not an empty one: nothing is paid until the pool covers ' +
+      'a reply, and nothing is paid once it is empty.',
   );
+  // The sentence may not make a paying condition out of the pool merely holding
+  // something: at one satoshi that is false, and this is the branch that cannot
+  // see the balance, so it is the one place a false sufficiency would go unseen.
+  // A phrase ban, honestly bounded — it stops this exact claim coming back, and
+  // it cannot recognise a different one.
+  assert.doesNotMatch(unknown.text, /holds something/, 'the unreadable sentence claims that anything in the pool pays');
   assert.equal(unknown.tone, 'warn', 'an unknown balance is not a calm state to read');
 
   // The control: the empty pool, which is a different sentence about a different

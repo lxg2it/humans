@@ -310,7 +310,7 @@ test('the number is never promised without the condition on it', async () => {
       // page which names it says, somewhere, when payment happens at all.
       assert.ok(
         named === 0 || rule >= 1,
-        `${name} names the guarantee setting without ever saying it is paid only while the fund holds something`,
+        `${name} names the guarantee setting without ever saying when payment stops`,
       );
       assert.match(html, /fund|pool/, `${name} does not say where the money comes from`);
     }
