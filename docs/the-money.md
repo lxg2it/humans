@@ -19,11 +19,46 @@ One entry per answer, in satoshis:
   is a record of transfers that happened, not a promise of transfers to come;
 - owed is what the two leave over.
 
-The console shows the person `N answered · M sats owed`, and it shows the fund
-separately. If the pool is empty it says so in as many words: *the guarantee is
-recorded but unfunded*. That asymmetry is deliberate. The promise and the money
-behind it are two different facts, and the interface refuses to blur them into
-"earnings".
+Four quantities are in play, and the pages use one word for each:
+
+- **owed** — the guarantee entries minus the settlements. It is a record of what
+  the service has promised, not a claim on anybody, and it is the one number that
+  grows when an answer is written and the operator does not pay;
+- **held** — what the pool address holds, read from the chain at the time printed
+  next to it. This is money that exists, and it is the only money the guarantee
+  can be paid from;
+- **coverage** — held against owed. When it is short, the shortfall is printed as
+  a number rather than described as a mood;
+- **paid** — a settlement, with an address and a transaction id. It is the only
+  entry in the ledger that is a transfer rather than a promise.
+
+A responder meeting these figures meets two of them at once and they are not the
+same quantity: the console header says `N answered · M sats owed`, which is what
+that *person* is owed, while the sentence directly beneath it gives the pool-wide
+figure. Kept separate on purpose, and the code names the pool-wide parameter in
+full (`owedAcrossEverybody`) so that passing the wrong one means ignoring its
+name.
+
+The console then says which of the following is true, in words, next to the
+number, at the moment a person is deciding whether to pick up a call:
+
+- **the pool is empty** — *the promise is recorded and unfunded, and it is paid if
+  the pool gets topped up*;
+- **something, but less than one reply** — *a reply taken now would be recorded
+  and unpaid until the pool is topped up*;
+- **funded and short of what is owed** — *N is owed across everybody who has
+  answered, so M of what has been promised is recorded and unpaid*, with both
+  numbers worked out at that moment. This is the case both easy stories get
+  wrong: the promise is neither dead nor fully backed;
+- **funded and covering what is owed** — the amount it covers, and the reading's
+  age, because a balance without its age is a claim about now;
+- **unreadable** — *the pool balance could not be read … that is a missing
+  figure, not an empty one*. A failure to read is never rendered as zero: the one
+  thing a person must not be told here is that the fund is empty when nobody
+  looked.
+
+That asymmetry is deliberate. The promise and the money behind it are two
+different facts, and the interface refuses to blur them into "earnings".
 
 ## The guarantee is paid if there is money in the pool
 
