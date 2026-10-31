@@ -52,6 +52,7 @@ export HUMANS_UID="${HUMANS_UID:-$(id -u)}"
 export HUMANS_GID="${HUMANS_GID:-$(id -g)}"
 BASE="http://127.0.0.1:$PORT"
 BODY=$(mktemp)
+HEADERS=$(mktemp)
 FAILED=0
 
 # The deployment is not ours to restart, and "this is isolated, we think" is not
@@ -99,7 +100,7 @@ cleanup() {
   # Leave nothing behind, including the image: a smoke test that accumulates
   # images on the deployment host is its own small kind of vandalism.
   docker image rm -f "$HUMANS_IMAGE" >/dev/null 2>&1 || true
-  rm -f "$BODY"
+  rm -f "$BODY" "$HEADERS"
   # Checked on the way out of a failed run too: a run that fails by taking the
   # service down must not be able to hide behind its first error.
   verify_deployment_untouched
@@ -123,6 +124,29 @@ check() {
   fi
   if [ -n "$want_text" ] && ! grep -qF -- "$want_text" "$BODY"; then
     fail "$name — $url answered $status without \"$want_text\""
+    return
+  fi
+  pass "$name"
+}
+
+# A status alone cannot distinguish a redirect that goes somewhere from one that
+# goes nowhere in particular, and the address below is in the README and in
+# people's bookmarks: what matters is WHERE it lands, not that it moved.
+check_redirect() {
+  local name="$1" url="$2" want_status="$3" want_location="$4"
+  local status location
+  status=$(curl -s -o "$BODY" -D "$HEADERS" -w '%{http_code}' "$BASE$url" || echo 000)
+  if [ "$status" != "$want_status" ]; then
+    fail "$name — $url answered $status, wanted $want_status"
+    return
+  fi
+  # `grep -i` rather than an awk with IGNORECASE set: BSD awk and mawk (macOS and
+  # the runner) both ignore that assignment, so the header read as absent and the
+  # check reported a redirect to "" — a false failure that looks like a broken
+  # route. `|| true` keeps a missing header a mismatch rather than an exit.
+  location=$(tr -d '\r' < "$HEADERS" | grep -i '^location:' | head -1 | sed 's/^[^:]*:[[:space:]]*//' || true)
+  if [ "$location" != "$want_location" ]; then
+    fail "$name — $url redirected to \"$location\", wanted \"$want_location\""
     return
   fi
   pass "$name"
@@ -191,12 +215,17 @@ check "the console is served"        /console    200 '<title>console</title>'
 check "the disclaimer is served"     /disclaimer 200 'Anthropic'
 check "the money page is served"     /money      200 'The money'
 check "the answering page is served" /answering  200 'Answering calls'
-# Signup is two pages with two different readers, and the notice on each is the
-# only mechanism here aimed at a non-person. A run that serves the form to
-# callers and not to responders — or serves the wrong notice on either — is a
-# failure you would otherwise only find by going to look.
+# Signup has ONE page now, for callers, and the responder side is a seat taken in
+# the console on arrival. So the addresses split, and both halves are checked:
+# the caller form still has to serve, and the retired responder address — which
+# is in the README and in people's bookmarks — has to send a person to the seat
+# rather than 404 into nothing. The notice aimed at a non-person moved with them
+# to /answer, so it is read where somebody actually decides to start; asserting
+# it on a page that no longer exists is how this check kept passing in a units
+# suite and failed in CI.
 check "signup is served to callers"   /signup              200 'If you are an agent'
-check "signup is served to responders" '/signup?as=responder' 200 'If you are a model, turn back'
+check_redirect "the retired responder signup sends you to the seat" '/signup?as=responder' 302 /console
+check "the responder notice is on the page they read" /answer 200 'If you are a model, turn back'
 # The challenge has to be in the page with a signature on it: an unsigned one
 # would let a visitor choose their own seed, which is much less work than
 # solving ours.

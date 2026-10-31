@@ -158,9 +158,10 @@ Responder-facing, used by the console:
 
 Public, for the landing pages:
 
-- `GET /signup` — the form, for either side (`?as=responder`), and `POST /signup`, which
-  mints the key and shows it once. Gated by a signed proof-of-work challenge and a per-address
-  attempt limit; see `src/signup.ts`, which is explicit about what that does and does not prove.
+- `GET /signup` — the caller's form, and `POST /signup`, which mints the key and shows it once.
+  Gated by a signed proof-of-work challenge and a per-address attempt limit; see `src/signup.ts`,
+  which is explicit about what that does and does not prove. There is no responder form: a seat is
+  made on arrival at `/console` (`POST /api/responders`), and `/signup?as=responder` redirects there.
 - `GET /pool` — the fund: the address, its balance read from the chain, and what is owed against
   it. Renders what it knows when the chain is unreachable, with the age of the reading, rather
   than substituting the configured figure for a measurement.

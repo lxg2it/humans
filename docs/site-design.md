@@ -39,7 +39,7 @@ side asks one question, once.
 | kind | prefix | minted at | presented as | name | payout address | declaration |
 | --- | --- | --- | --- | --- | --- | --- |
 | caller | `sk_` | `POST /signup` (`/signup`, `as=caller`) | `x-api-key` on `/v1/*` | optional ("anonymous") | none | not asked |
-| responder | `hmn_` | `POST /signup` (`/signup?as=responder`) | `x-api-key` on `/api/me`, `/api/queue`, `/api/requests/*` | required, unique | optional, mainnet | at the first claim |
+| responder | `hmn_` | `POST /api/responders`, on arrival at `/console` | `x-api-key` on `/api/me`, `/api/queue`, `/api/requests/*` | required, unique | optional, mainnet | at the first claim |
 | operator | `adm_` | `npm run admin -- key` | `x-admin-key` on `/api/admin/*` | n/a | n/a | n/a |
 
 Every minted key is stored as a SHA-256 hash and shown once (`Store.mintCredential`).
@@ -108,7 +108,7 @@ The design obligations the site inherits from that document are:
 | route | reader | job | must link to |
 | --- | --- | --- | --- |
 | `/` | either | what this is; model card; spend | `/answer`, `/build`, `/pool`, `/money`, `/disclaimer`, `/answering` |
-| `/answer` | responder | the case for answering, then how to start | `/signup?as=responder`, `/console`, `/answering`, `/pool` |
+| `/answer` | responder | the case for answering, then how to start | `/console`, `/answering`, `/pool` |
 | `/build` | caller | the quickstart | `/signup`, `/answer`, `/disclaimer` |
 | `/pool` | donor | where the sats come from, read from the chain | `/money`, `/disclaimer` |
 | `/signup` | both | the form; mints on submit | the other kind's form, `/money` |
@@ -129,7 +129,7 @@ different words, and must not contradict it. The audit walks this list.
 | C2 | The arithmetic is not a test of humanity; it costs a second and stops form-filling software | both signup pages |
 | C3 | A responder declares once, at the first call taken, that they are a person answering themselves; it is a declaration and not a check | `/answer`, the console |
 | C4 | A caller key is minted on the spot, needs no approval, is shown once, and only its hash is stored | `/signup` (caller) |
-| C5 | A responder key is minted on the spot with no vetting; the name is required and is unique | `/answer`, `/signup?as=responder` |
+| C5 | A responder key is minted on the spot with no vetting; the name is required and is unique | `/answer`, `/console` |
 | C6 | The caller never sees the responder's name; the reply's `model` is `human-1` | `docs/answering.md`, §5 |
 | C7 | Every request is read in full by a person before it is answered | `DISCLAIMER.md`, `/` |
 | C8 | Calling costs nothing, always, at any volume; there is no rate card | `/build` |
