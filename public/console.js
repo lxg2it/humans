@@ -87,10 +87,61 @@
     stopTimers();
     $('main').hidden = true;
     $('who').hidden = true;
+    $('payout-line').hidden = true;
+    $('seat-panel').hidden = true;
     $('gate').hidden = false;
     $('gate-error').hidden = !reason;
     if (reason) $('gate-error').textContent = reason;
     $('conn').className = 'dot';
+  }
+
+  /**
+   * A seat, made on arrival.
+   *
+   * Nobody answering a call should have to invent a name or carry a secret
+   * across from another page first. The server makes the seat; this asks it to
+   * and puts the key where the rest of the console expects to find one, which is
+   * this browser and nowhere else.
+   *
+   * The failure path matters more than the happy one. A service that cannot mint
+   * a seat must still let somebody with a key in their hand start answering, so
+   * a failure opens the key form rather than stopping at an apology — and the
+   * server's own words are shown, because "could not make a seat" tells a person
+   * nothing about whether to wait or leave.
+   */
+  async function takeSeat() {
+    $('main').hidden = true;
+    $('who').hidden = true;
+    $('payout-line').hidden = true;
+    $('seat-panel').hidden = true;
+    $('gate').hidden = false;
+    $('gate-title').textContent = 'Making you a seat\u2026';
+    $('gate-lead').hidden = false;
+    $('gate-lead').textContent =
+      'No form, no name to invent, no key to paste. Your seat is kept in this browser and the ledger keeps ' +
+      'your credit against it.';
+    $('gate-form').hidden = true;
+    $('gate-switch').hidden = true;
+    $('gate-new-line').hidden = true;
+    $('gate-error').hidden = true;
+    try {
+      const response = await fetch('/api/responders', { method: 'POST' });
+      let body = null;
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
+      if (!response.ok || !body || !body.key) {
+        const message = body?.error?.message || `${response.status} ${response.statusText}`;
+        throw new Error(message);
+      }
+      await signIn(body.key);
+    } catch (error) {
+      $('gate-title').textContent = 'No seat could be made';
+      $('gate-lead').textContent = error.message;
+      $('gate-form').hidden = false;
+    }
   }
 
   async function signIn(candidate) {
@@ -113,9 +164,20 @@
       startPolling();
     } catch (error) {
       key = previous;
+      $('gate').hidden = false;
+      $('gate-title').textContent = previous ? 'That seat did not work' : 'The seat could not be used';
+      $('gate-lead').hidden = false;
+      $('gate-lead').textContent =
+        'A key the service no longer recognises is the usual reason. Paste one you have kept, or take a new seat.';
+      $('gate-form').hidden = false;
       $('gate-error').hidden = false;
       $('gate-error').textContent = error.message;
       $('gate-key').value = '';
+      $('gate-new-line').hidden = false;
+      $('gate-switch').hidden = true;
+      $('main').hidden = true;
+      $('who').hidden = true;
+      $('payout-line').hidden = true;
     }
   }
 
@@ -924,10 +986,14 @@
   function updateMeter() {
     if (!detail || !me) return;
     const { body } = currentPayload();
+    // Only the call inputs cost tokens. Serialising an empty list here would
+    // count the two characters of "[]", so an untouched answer would report
+    // "estimated from 2 characters" and the meter could never read zero.
+    const tools = body.tools || [];
     const chars =
       (body.thinking || '').length +
       (body.text || '').length +
-      JSON.stringify((body.tools || []).map((call) => call.input)).length;
+      (tools.length === 0 ? 0 : JSON.stringify(tools.map((call) => call.input)).length);
     const estimated = chars === 0 ? 0 : Math.max(1, Math.ceil(chars / (me.chars_per_token || 4)));
     const max = detail.max_tokens || 0;
     const ratio = max > 0 ? estimated / max : 0;
@@ -1059,7 +1125,32 @@
     if (value) signIn(value);
   });
 
-  $('signout').addEventListener('click', () => signOut());
+  $('gate-use-existing').addEventListener('click', () => {
+    $('gate-title').textContent = 'Use a key you already have';
+    $('gate-lead').hidden = true;
+    $('gate-form').hidden = false;
+    $('gate-switch').hidden = true;
+    $('gate-key').focus();
+  });
+  $('gate-new').addEventListener('click', () => takeSeat());
+
+  $('seat-show').addEventListener('click', () => {
+    $('seat-name').textContent = me ? me.name : '';
+    $('seat-key').value = key;
+    $('seat-panel').hidden = false;
+  });
+  $('seat-close').addEventListener('click', () => {
+    $('seat-panel').hidden = true;
+    $('seat-forget-note').hidden = true;
+  });
+  $('seat-forget').addEventListener('click', async () => {
+    $('seat-forget-note').hidden = false;
+    // Deliberately not a dialog: the sentence above the button already says what
+    // clearing this browser does and does not lose, and a confirm() would be the
+    // only modal in the console.
+    signOut('');
+    await takeSeat();
+  });
   $('declare').addEventListener('change', () => {
     declared = $('declare').checked;
     setTakeButton();
@@ -1109,5 +1200,5 @@
   // ---- boot ----------------------------------------------------------------
 
   if (key) signIn(key);
-  else signOut('');
+  else takeSeat();
 })();

@@ -71,36 +71,37 @@ test('the landing page carries the claims the documents require of it', async ()
 test('every page that promises or asks for a key says where to get it', async () => {
   const h = await harness();
   try {
-    // R1 on /answer: step one says a key is minted on the spot, so that sentence
-    // carries the link. It pointed at "the notice above the form" in wording
-    // while the href went to the mint, which is a link a stranger cannot see.
+    // R1 on /answer: the responder side no longer has a signup page, so the page
+    // a visitor reads before answering has to send them to the thing that
+    // replaces it. This used to point at a form; a stale link here is a dead end
+    // for the one visitor who was ready to start.
     const answer = (await h.call('/answer')).body as string;
+    assert.ok(internalLinks(answer).includes('/console'), 'the answering page no longer links to the console');
     assert.ok(
-      internalLinks(answer).includes('/signup?as=responder'),
-      'the answering page no longer links to the responder mint',
-    );
-    assert.match(
-      answer,
-      /<a href="\/signup\?as=responder">[^<]*minted[^<]*<\/a>/i,
-      'the link to the mint is there but its text does not say so',
+      !internalLinks(answer).includes('/signup?as=responder'),
+      'the answering page still sends responders to a form that is a redirect',
     );
 
-    // R2 on the console: the gate asks for a responder key, so it must offer a
-    // route to one. This is the defect a visitor reported on 2026-10-23 — the
-    // site offered him a key, he took it, and the console then demanded one.
+    // R2 on the console: it used to be a gate demanding a key nothing had given
+    // you — the defect a visitor reported on 2026-10-23. It now makes the seat
+    // itself, which is the strongest version of "says where to get it": there is
+    // nowhere to go and nothing to fetch.
     const console_ = (await h.call('/console')).body as string;
-    assert.match(
+    assert.ok(
+      !console_.includes('/signup?as=responder'),
+      'the console still points at the retired responder form',
+    );
+    assert.match(console_, /Making you a seat/, 'the console no longer says it is making a seat');
+    assert.doesNotMatch(
       console_,
-      /<a href="\/signup\?as=responder">/,
-      'the console gate asks for a key it does not say how to get',
+      /<h1>Responder key<\/h1>/,
+      'the console has gone back to opening with a key field',
     );
 
-    // R3 on both signup forms: they share one route, so a visitor who arrives at
-    // the wrong one has to be able to cross over from the page itself.
+    // R3 on the caller form: it is the only form left, and a visitor who arrives
+    // on the wrong side still has to be able to cross over from the page itself.
     const caller = (await h.call('/signup')).body as string;
-    const responder = (await h.call('/signup?as=responder')).body as string;
-    assert.ok(internalLinks(caller).includes('/signup?as=responder'), 'the caller form has no way to the responder form');
-    assert.ok(internalLinks(responder).includes('/signup'), 'the responder form has no way to the caller form');
+    assert.ok(internalLinks(caller).includes('/console'), 'the caller form has no way to the responder side');
   } finally {
     await h.close();
   }

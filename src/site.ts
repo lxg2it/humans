@@ -396,7 +396,8 @@ export function answerPage(pool: PoolReading): string {
           <div class="cta">
             <a class="btn btn-primary" href="/console">Open the console <span class="arrow">→</span></a>
             <a class="btn" href="/answering">What answering involves</a>
-          </div>`,
+          </div>
+          ${RESPONDER_NOTICE}`,
         'hero',
       ),
       band(
@@ -439,22 +440,19 @@ ${rows}
         `          <h2 class="sec">How to start</h2>
           <ol class="steps">
             <li>
-              <h3>Get a responder key</h3>
-              <p><a href="/signup?as=responder">One is minted here</a>, on the spot, and you choose the name you
-              answer under. That name is what the ledger keeps and what your console shows; the caller is never
-              shown it, because the reply says <code>human-1</code> whatever you pick. There is no vetting: a key
-              is a seat rather than a privilege, and the service would rather be answerable for who it lets in
-              than pretend a form can tell.</p>
+              <h3>Open the console</h3>
+              <p><a href="/console">The console</a> makes you a seat the moment it loads. There is no form, no name
+              to invent and no key to copy: being willing to answer is the whole of the qualification, and asking
+              anyone to fill in a page first would be asking them to do the site&rsquo;s filing.</p>
+              <p class="muted">Your seat is called something like <code>responder-3f9c2a</code>, which the ledger
+              and the operator keep credit against. The caller never sees it: the reply says <code>human-1</code>
+              whatever your seat is called. This browser is the seat — clear its site data and you will be given a
+              new one, and the credit on the old one stays where it is. The console can show you the key behind
+              it if you would rather answer from somewhere else.</p>
               <p class="muted">You will be asked one thing, and it is a sentence rather than a check: that you are
-              a person and will answer these calls yourself. It is asked when you take your first call, not here,
-              because until you have decided to sit down there is nothing to agree to. Nothing can verify the
-              answer. It is the only thing standing between this and every model on the internet doing it
-              cheaper.</p>
-            </li>
-            <li>
-              <h3>Open the console and paste it in</h3>
-              <p>The console lives at <code>/console</code> and asks for the key once. It is kept in that browser
-              only, and it is stored server-side as a hash, so nobody — including the operator — can read it back.</p>
+              a person and will answer these calls yourself. It is asked when you take your first call, because
+              until you have decided to sit down there is nothing to agree to. Nothing can verify the answer. It
+              is the only thing standing between this and every model on the internet doing it cheaper.</p>
             </li>
             <li>
               <h3>Take a call and answer it</h3>
@@ -463,6 +461,13 @@ ${rows}
               to doubt it.</p>
               <p class="muted">Read <a href="/answering">answering calls</a> before you take your first one. It is
               short, and it is the page that tells you what not to do.</p>
+            </li>
+            <li>
+              <h3>Be paid, or do not</h3>
+              <p>The thank-you goes to a Bitcoin address if you name one, and the console will ask for it the
+              first time something is owed to you. Nothing is required up front, and nothing is lost by leaving
+              it blank: an address can be set or changed at any point, so a wallet you rotate next year is not a
+              wallet you are stuck with.</p>
             </li>
           </ol>
           <div class="cta">
@@ -900,7 +905,7 @@ export function signupPage(
           </form>
           <p class="muted small">${
             caller
-              ? 'Want to answer calls rather than send them? <a href="/signup?as=responder">A responder key is minted here</a>.'
+              ? 'Want to answer calls rather than send them? <a href="/console">A seat is made for you here</a>, with nothing to fill in.'
               : 'Want to send requests rather than answer them? <a href="/signup">A caller key is minted here</a>.'
           }</p>
           <script>${SOLVER_SCRIPT}</script>`,

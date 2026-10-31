@@ -5,6 +5,7 @@ import { normaliseAddress, validateMainnetAddress } from '../btc.ts';
 import { CHALLENGE_MAX_AGE_MS, checkSolution, issueChallenge } from '../signup.ts';
 import type { SignupKind } from '../signup.ts';
 import { signupPage, signupResultPage } from '../site.ts';
+import { createAddressBudget } from '../budget.ts';
 
 /**
  * Self-service keys.
@@ -34,9 +35,6 @@ import { signupPage, signupResultPage } from '../site.ts';
 const ATTEMPTS_PER_HOUR = 20;
 const HOUR_MS = 60 * 60 * 1000;
 
-/** How many addresses one process will remember. Past this, expired entries are swept. */
-const TRACKED_ADDRESSES = 10_000;
-
 export function signupRouter(store: Store): Router {
   const router = Router();
 
@@ -45,21 +43,13 @@ export function signupRouter(store: Store): Router {
    * same limitation the rate limiter carries and for the same reason: there is
    * no shared store here by design. Restarting the service resets a visitor's
    * budget. That is a real limitation rather than a hidden one.
+   *
+   * The counting is shared with the console's seat minting (src/budget.ts); the
+   * number is not, because a submission and a seat are not the same size of
+   * thing.
    */
-  const attempts = new Map<string, number[]>();
+  const budget = createAddressBudget(ATTEMPTS_PER_HOUR, HOUR_MS);
   const spent = new Map<string, number>();
-
-  function overBudget(address: string, now: number): boolean {
-    const recent = (attempts.get(address) ?? []).filter((at) => now - at < HOUR_MS);
-    recent.push(now);
-    attempts.set(address, recent);
-    if (attempts.size > TRACKED_ADDRESSES) {
-      for (const [key, times] of attempts) {
-        if (times.every((at) => now - at >= HOUR_MS)) attempts.delete(key);
-      }
-    }
-    return recent.length > ATTEMPTS_PER_HOUR;
-  }
 
   function alreadySpent(seed: string, now: number): boolean {
     for (const [key, until] of spent) if (until <= now) spent.delete(key);
@@ -133,9 +123,26 @@ export function signupRouter(store: Store): Router {
     return { ok: true, address: normaliseAddress(result.info.address) };
   }
 
+  /**
+   * A responder no longer signs up here, or anywhere.
+   *
+   * The seat is made the moment somebody opens the console, which is the only
+   * place a seat is any use — see POST /api/responders. Keeping a second front
+   * door would mean two shapes of responder and two sets of questions, and the
+   * questions were the problem: a name nobody wanted to invent and a secret to
+   * copy into another box before anything could be seen.
+   *
+   * The redirect is permanent-ish rather than a 404 because the address is in
+   * the README, in the answering page and in other people's bookmarks. A dead
+   * link to the thing that used to be the front door is a worse answer than
+   * sending them to the door.
+   */
   router.get('/signup', (req: Request, res: Response) => {
-    const kind = kindOf(req.query.as);
-    res.type('html').send(signupPage(kind, issueChallenge()));
+    if (kindOf(req.query.as) === 'responder') {
+      res.redirect(302, '/console');
+      return;
+    }
+    res.type('html').send(signupPage('caller', issueChallenge()));
   });
 
   /**
@@ -150,7 +157,15 @@ export function signupRouter(store: Store): Router {
     const now = Date.now();
     const address = req.ip ?? 'unknown';
 
-    if (overBudget(address, now)) {
+    // A stale form, or a script that read a page from before the seat moved.
+    // Redirected rather than refused, because the person has done the work and
+    // the thing they were trying to reach is exactly where it has gone.
+    if (kind === 'responder') {
+      res.redirect(303, '/console');
+      return;
+    }
+
+    if (budget.record(address, now)) {
       res
         .status(429)
         .type('html')

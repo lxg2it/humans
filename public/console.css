@@ -47,8 +47,6 @@ p { margin: 6px 0; }
 
 #bar {
   display: flex; justify-content: space-between; align-items: center;
-#bar {
-  display: flex; justify-content: space-between; align-items: center;
   padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
   flex: 0 0 auto;
 }
@@ -58,9 +56,24 @@ p { margin: 6px 0; }
 .dot.live { background: var(--accent); }
 
 #gate { display: flex; align-items: center; justify-content: center; flex: 1; }
-#gate form { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; width: 380px; }
-#gate input { width: 100%; margin: 12px 0; }
-#gate button { width: 100%; }
+/* The card exists in three states — making a seat, a seat that could not be
+   made, and a key form for somebody who kept theirs — and they share a shape
+   because they are one screen rather than three. */
+.gate-card, .seat-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; width: 420px;
+}
+.gate-card h1 { margin: 0 0 8px; font-size: 1.15rem; }
+.gate-card form { margin-top: 14px; }
+.gate-card input { width: 100%; margin: 0 0 12px; }
+.gate-card form button { width: 100%; }
+.gate-card .link { font-size: inherit; }
+
+/* The seat panel drops over the work area rather than replacing it: it is a
+   thing you consult, not a place you go. */
+#seat-panel { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.45); z-index: 20; }
+.seat-card h2 { margin: 0 0 10px; font-size: 1.05rem; }
+.seat-card input { width: 100%; margin: 6px 0 10px; font-family: var(--mono, monospace); font-size: 0.85rem; }
 /* The gate's one link: where a responder key comes from. Styled the way the
    landing pages style theirs, because this is the first anchor the console has
    ever had and the browser default would be the only blue in the product. */

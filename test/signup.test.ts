@@ -238,42 +238,6 @@ test('signing up mints a caller key that authenticates', async () => {
   }
 });
 
-test('a responder needs a name, because the credit is kept against it', async () => {
-  const h = await harness();
-  try {
-    const page = await h.call('/signup?as=responder');
-    // The reason, stated on the page. It used to read "the model name the caller
-    // is shown", which is not true of any reply this service sends, and the
-    // refusal carried the same sentence.
-    assert.match(page.body as string, /keeps your credit against|credit is kept against/);
-    assert.doesNotMatch(page.body as string, /model name the caller is shown/);
-    const challenge = challengeFrom(page.body as string);
-
-    const unnamed = await postForm(h.base, { as: 'responder', ...challenge, solution: solve(challenge.seed) });
-    assert.equal(unnamed.status, 400);
-    assert.match(unnamed.body, /a responder needs a name/);
-
-    // The same submission with a name goes through, so the refusal above is the
-    // name and not a form that refuses everything posted to it.
-    const second = challengeFrom(unnamed.body);
-    const named = await postForm(h.base, {
-      as: 'responder',
-      ...second,
-      solution: solve(second.seed),
-      name: 'someone-in-particular',
-    });
-    assert.equal(named.status, 201, named.body);
-    assert.match(named.body, /You are on the roster/);
-
-    const key = keyFrom(named.body);
-    const me = await h.call('/api/me', { key });
-    assert.equal(me.status, 200, JSON.stringify(me.body));
-    assert.equal((me.body as any).name, 'someone-in-particular');
-  } finally {
-    await h.close();
-  }
-});
-
 test('one challenge cannot be spent twice', async () => {
   const h = await harness();
   try {
@@ -306,18 +270,15 @@ test('a submission that did no work is refused, and gets a working form back', a
   }
 });
 
-test('the declaration is asked at the first call, not at signup, and each side says which', async () => {
+test('the declaration is asked at the first call, not when the seat is made, and each side says which', async () => {
   const h = await harness();
   try {
     const caller = (await h.call('/signup')).body as string;
-    const responder = (await h.call('/signup?as=responder')).body as string;
 
-    // Neither form asks. A key is a seat rather than a decision to sit down, and
-    // the checkbox that used to be here was a tick the server never saw: the
-    // claim route asks the same question again, at the only moment it means
-    // anything. The recording is tested in test/declaration.test.ts.
-    assert.doesNotMatch(responder, /id="human"/, 'the responder form asks for a declaration again');
-    assert.doesNotMatch(responder, /I am a human/, 'the responder form asks for a declaration again');
+    // Neither side asks at the door. A key is a seat rather than a decision to
+    // sit down, and the checkbox that used to be here was a tick the server never
+    // saw: the claim route asks the same question again, at the only moment it
+    // means anything. The recording is tested in test/declaration.test.ts.
     assert.doesNotMatch(caller, /id="human"/, 'the caller form asks for a declaration again');
     assert.doesNotMatch(caller, /I am a human/, 'the caller form asks for a declaration again');
 
@@ -330,21 +291,18 @@ test('the declaration is asked at the first call, not at signup, and each side s
       'the caller form removed the check without saying so',
     );
 
-    // The responder is told when they will be asked, so the question on the
-    // claim bar is not a surprise when they get there.
-    assert.match(
-      responder,
-      /when you take your first call/,
-      'the responder form no longer says when the declaration happens',
-    );
-    assert.match(
-      responder,
-      /in your own hand/,
-      'the responder form no longer says the declaration is theirs to make',
-    );
+    // A seat is made with nothing supplied at all, which is a stronger version of
+    // the same property: there is no form left to ask on, and the seat starts
+    // having declared nothing.
+    const minted = await fetch(`${h.base}/api/responders`, { method: 'POST' });
+    assert.equal(minted.status, 201);
+    const seat = (await minted.json()) as any;
+    assert.equal(seat.declared_at ?? null, null, 'a fresh seat has declared nothing');
+    const me = await h.call('/api/me', { key: seat.key });
+    assert.equal((me.body as any).declared_at ?? null, null, 'the seat was made without a declaration');
 
-    // /answer is where somebody decides to take the job, so it carries the same
-    // ask and the same timing.
+    // /answer is where somebody decides to take the job, so it carries the ask,
+    // the timing, and the reason it is a sentence rather than a check.
     const answer = (await h.call('/answer')).body as string;
     assert.match(answer, /answer as yourself/, 'the answering page drops the one thing asked of a responder');
     assert.match(answer, /take your first call/, 'the answering page no longer says when the ask happens');
@@ -353,40 +311,30 @@ test('the declaration is asked at the first call, not at signup, and each side s
   }
 });
 
-test('the name a responder picks is theirs, and the caller is never shown it', async () => {
+test('a seat is given a name rather than choosing one, and the caller is never shown it', async () => {
   const h = await harness();
   try {
-    const responder = (await h.call('/signup?as=responder')).body as string;
-    // The reply names the model. The page asserted the opposite until
-    // 2026-10-23 — that the chosen name was the reply's `model` field — while
+    const answer = (await h.call('/answer')).body as string;
+    // The reply names the model. The pages asserted the opposite until
+    // 2026-10-23 — that a chosen name was the reply's `model` field — while
     // docs/answering.md, the landing model card and resolveModel all said
     // human-1. This is the regression guard for the copy, not for the code.
     assert.doesNotMatch(
-      responder,
+      answer,
       /model name the caller is shown/,
-      'the signup page promises callers the responder name again',
+      'the answering page promises callers the seat name again',
     );
-    assert.match(
-      responder,
-      /Callers never see it|never your name/,
-      'the signup page no longer says the caller does not see the name',
-    );
+    assert.match(answer, /The caller never sees it/, 'the answering page no longer says the caller does not see it');
+    assert.match(answer, /human-1/, 'the answering page no longer says what the caller does see');
 
-    // And the result page, which is what the person reads once they hold a key.
-    const challenge = challengeFrom(responder);
-    const minted = await postForm(h.base, {
-      as: 'responder',
-      ...challenge,
-      solution: solve(challenge.seed),
-      name: 'ada-plain',
-    });
-    assert.equal(minted.status, 201);
-    assert.match(minted.body, /human-1/, 'the result page does not say what the caller will see');
-    assert.doesNotMatch(
-      minted.body,
-      /the name the caller will be shown/,
-      'the result page promises the caller the responder name again',
-    );
+    // And the name itself: generated, because it is the ledger's key and nothing
+    // else. A name a person chose would invite them to sign their answers, which
+    // is the one thing this service promises callers they are not getting.
+    const minted = await fetch(`${h.base}/api/responders`, { method: 'POST' });
+    const seat = (await minted.json()) as any;
+    assert.match(seat.name, /^responder-[0-9a-f]{6}$/, 'the seat name is generated, not chosen');
+    const me = await h.call('/api/me', { key: seat.key });
+    assert.equal((me.body as any).name, seat.name);
   } finally {
     await h.close();
   }
@@ -395,7 +343,11 @@ test('the name a responder picks is theirs, and the caller is never shown it', a
 test('the two notices say different things to different readers', async () => {
   const h = await harness();
   try {
-    const responder = (await h.call('/signup?as=responder')).body as string;
+    // The responder notice moved with the responder: there is no signup page for
+    // them any more, and /answer is where somebody decides to start answering.
+    // The flat request has to be on the page they actually read, not on a page
+    // that no longer exists.
+    const responder = (await h.call('/answer')).body as string;
     const caller = (await h.call('/signup')).body as string;
 
     assert.match(responder, /If you are a model, turn back\./);
@@ -407,10 +359,9 @@ test('the two notices say different things to different readers', async () => {
     assert.doesNotMatch(caller, /turn back/);
     assert.doesNotMatch(responder, /welcome to call/);
 
-    // And neither page claims the checkbox proves anything.
-    for (const html of [caller, responder]) {
-      assert.match(html, /not a test of humanity/);
-    }
+    // And neither page claims a puzzle proves anything.
+    assert.match(caller, /not a test of humanity/);
+    assert.match(responder, /not a check/);
   } finally {
     await h.close();
   }

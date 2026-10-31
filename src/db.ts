@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { generateKey } from './config.ts';
@@ -586,6 +586,34 @@ export class Store {
       .prepare('UPDATE credentials SET declared_at = ? WHERE id = ? AND declared_at IS NULL')
       .run(at, id);
     return Number(result.changes) === 1;
+  }
+
+  /**
+   * A seat, minted without asking the person anything.
+   *
+   * Nobody choosing to answer a call should have to produce a name, a password
+   * or an address first. What a responder needs is a seat, and the console makes
+   * one on arrival — see src/routes/responder.ts for where that is offered and
+   * what bounds it.
+   *
+   * The name is generated rather than chosen, which removes the collision rule
+   * below from the responder's path entirely: two people cannot answer under one
+   * name if neither of them picked it. It stays the ledger's key, so it has to be
+   * unique among ACTIVE seats — `responder-` plus three random bytes is 16.7M
+   * spellings, and the check is here rather than trusted because a collision
+   * would silently pool two people's earnings.
+   *
+   * Eight attempts before giving up, which is not a retry for luck: at any
+   * plausible number of live seats the first attempt succeeds, and a loop that
+   * gave up after one would turn an unlucky draw into a broken front door.
+   */
+  mintResponderSeat(): { id: string; key: string; name: string } {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const name = `responder-${randomBytes(3).toString('hex')}`;
+      if (this.responderNameTaken(name)) continue;
+      return { ...this.mintCredential('responder', name), name };
+    }
+    throw new Error('could not mint a responder seat: eight generated names were already taken');
   }
 
   /**

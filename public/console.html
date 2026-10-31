@@ -18,7 +18,7 @@
         <span id="responder-name"></span>
         <span class="sep">·</span>
         <span id="earnings" title="earned / paid / owed"></span>
-        <button id="signout" class="link">sign out</button>
+        <button id="seat-show" class="link" title="what this browser is keeping">seat</button>
       </div>
       <div class="who" id="payout-line" hidden>
         <span id="payout"></span>
@@ -32,22 +32,60 @@
       </div>
     </header>
 
-    <!-- Key entry. The only screen that exists before we know who you are. -->
+    <!--
+      The seat. Made on arrival, because being willing to answer a call is the
+      whole of the qualification and asking somebody to fill in a page first is
+      asking them to do the site's filing.
+
+      This screen is therefore not a gate. It is what a person sees while a seat
+      is being made, or when the making failed and there is a key in their hand
+      to fall back on.
+    -->
     <section id="gate" hidden>
-      <form id="gate-form">
-        <h1>Responder key</h1>
-        <p class="muted">
-          This console answers API calls as a human. You need a responder key to see the queue. It is kept in
-          this browser only.
+      <div class="gate-card">
+        <h1 id="gate-title">Making you a seat&hellip;</h1>
+        <p class="muted" id="gate-lead">
+          No form, no name to invent, no key to paste. Your seat is kept in this browser and the ledger keeps
+          your credit against it.
         </p>
-        <input id="gate-key" type="password" autocomplete="off" placeholder="hmn_..." />
-        <button type="submit">Sign in</button>
-        <p class="muted small">
-          No key yet? <a href="/signup?as=responder">One is minted here</a>, on the spot and without asking anybody.
-          A caller key (<code>sk_...</code>) will not work on this side: this page needs the key you answer with.
-        </p>
+        <form id="gate-form" hidden>
+          <input id="gate-key" type="password" autocomplete="off" placeholder="hmn_..." aria-label="Responder key" />
+          <button type="submit">Use this key</button>
+        </form>
         <p id="gate-error" class="error" hidden></p>
-      </form>
+        <p class="muted small" id="gate-new-line" hidden>
+          <button id="gate-new" class="link" type="button">Make me a new seat instead</button>
+        </p>
+        <p class="muted small" id="gate-switch">
+          <button id="gate-use-existing" class="link" type="button">I already have a responder key</button>
+        </p>
+      </div>
+    </section>
+
+    <!-- The seat, opened from the header. Its job is to make the one fragility
+         of a browser-held seat visible while there is still time to copy it. -->
+    <section id="seat-panel" hidden>
+      <div class="seat-card">
+        <h2>This browser is your seat</h2>
+        <p class="muted">
+          You were given <code id="seat-name"></code> when you arrived, and the ledger keeps whatever is earned
+          against that name. There is nothing to sign in to and nothing to remember.
+        </p>
+        <label class="small muted" for="seat-key">The key behind it</label>
+        <input id="seat-key" type="text" readonly spellcheck="false" />
+        <p class="muted small">
+          Copy this if you want the seat in another browser. It is stored on the server only as a hash, so this
+          is the only copy anywhere, and it is worth saying plainly: clearing this browser&rsquo;s site data
+          loses the seat. It does not lose the credit — that stays against the name — but the only way back to
+          it is this key.
+        </p>
+        <p class="muted small">
+          <button id="seat-forget" class="link">Start a different seat in this browser</button>
+          <span id="seat-forget-note" hidden>Starting a new seat now. The one you had is still there under its
+          name, and still only reachable with its key.</span>
+        </p>
+        <p><button id="seat-close" class="link">close</button></p>
+      </div>
     </section>
 
     <main id="main" hidden>

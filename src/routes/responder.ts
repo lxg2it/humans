@@ -18,6 +18,7 @@ import { config } from '../config.ts';
 import { normaliseAddress, validateMainnetAddress } from '../btc.ts';
 import { createPoolReader } from '../pool.ts';
 import type { PoolReader } from '../pool.ts';
+import { createAddressBudget } from '../budget.ts';
 
 /**
  * The responder-facing surface: what the console calls.
@@ -98,6 +99,64 @@ export function responderRouter(
    * belongs to the route it asked for.
    */
   const asResponder = requireResponder(store);
+
+
+  /**
+   * Seats per address per hour.
+   *
+   * Counted per ADDRESS rather than per person, because there is no person to
+   * count — the same limitation the signup form carries, and the same reason:
+   * this service has no shared store to count against.
+   *
+   * Ten is chosen to be invisible to a household or a shared office and useless
+   * to a script, which is the only trade available. It is deliberately not the
+   * signup form's twenty: a seat is cheap and a seat that is refused is a
+   * person turned away at the door, so the bound is loose enough to never be the
+   * reason somebody could not start. What actually protects the queue is not
+   * this number; it is that a machine answering calls is a machine pretending to
+   * be the thing this service sells.
+   */
+  const SEATS_PER_HOUR = 10;
+  const seatBudget = createAddressBudget(SEATS_PER_HOUR, 60 * 60 * 1000);
+
+  /**
+   * A seat, made on arrival.
+   *
+   * There is no form here on purpose. Somebody who has decided to answer a call
+   * has already made every decision that matters, and asking them to invent a
+   * name and copy a secret into another box is asking them to do the site's
+   * filing. So the console calls this the moment it does not recognise the
+   * browser, and the seat is theirs before they see the queue.
+   *
+   * The name is generated rather than chosen — `responder-3f9c2a` — because it
+   * is the ledger's key and nothing else. Nobody sees it but the operator and
+   * the person themselves; a caller is told `human-1` whatever it says. A name
+   * a person chose would have to be checked for collisions and would invite them
+   * to sign their answers, which is the one thing this service promises callers
+   * they are not getting.
+   *
+   * The key comes back in plaintext exactly once, here, and is stored as a hash
+   * like every other credential. What holds it afterwards is the browser.
+   */
+  router.post('/api/responders', (req: Request, res: Response) => {
+    if (seatBudget.record(req.ip ?? 'unknown')) {
+      throw new RequestError(
+        429,
+        'rate_limit_error',
+        `that is ${SEATS_PER_HOUR} new seats from this address in the last hour. If you are on a shared ` +
+          `network, that is somebody else on it — the limit clears within the hour.`,
+      );
+    }
+    const seat = store.mintResponderSeat();
+    res.status(201).json({
+      id: seat.id,
+      name: seat.name,
+      key: seat.key,
+      // Said in the response rather than only in documentation, because this is
+      // the one moment the key exists in a form anybody can copy.
+      warning: 'this key is shown once and stored only as a hash; the console keeps it in this browser',
+    });
+  });
 
   router.get('/api/me', asResponder, (req: Request, res: Response) => {
     const responder = req.responder!;
